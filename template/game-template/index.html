@@ -1,0 +1,116 @@
+<!--
+Title: Template Runner
+Description: Minimal runner scaffold demonstrating keyboard + touch, score and pause.
+Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-screen pause button.
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Template Runner</title>
+  <style>
+    html,body{height:100%;margin:0;font-family:sans-serif;background:#111;color:#eee}
+    canvas{display:block;background:#222;margin:0 auto}
+    #hud{position:fixed;left:10px;top:10px;font-size:18px}
+    #pauseBtn{position:fixed;right:10px;top:10px;padding:8px 12px;background:#444;color:#fff;border-radius:6px;touch-action:none}
+    #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:28px}
+    button{font:inherit}
+  </style>
+</head>
+<body>
+  <div id="hud">Score: <span id="score">0</span></div>
+  <button id="pauseBtn" aria-pressed="false">Pause</button>
+  <div id="pauseOverlay" role="status" aria-hidden="true">Paused</div>
+  <canvas id="c" width="600" height="400"></canvas>
+
+  <script>
+    // Minimal game scaffold: a square that moves horizontally and a score that increases.
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+
+    let w = canvas.width, h = canvas.height;
+    let x = 50, y = h/2 - 10, vx = 0;
+    let score = 0;
+    let paused = false;
+
+    function setPaused(v){
+      paused = v;
+      pauseOverlay.style.display = paused ? 'flex' : 'none';
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+      pauseBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+      pauseOverlay.setAttribute('aria-hidden', (!paused).toString());
+    }
+
+    // Controls: keyboard
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === 'ArrowRight' || e.key === 'd') vx = 2;
+      if(e.key === 'ArrowLeft' || e.key === 'a') vx = -2;
+      if(e.key === ' ') { score += 1; scoreEl.textContent = score; }
+      if(e.key.toLowerCase() === 'p') setPaused(!paused);
+    });
+    window.addEventListener('keyup', (e)=>{
+      if(e.key === 'ArrowRight' || e.key === 'd') vx = 0;
+      if(e.key === 'ArrowLeft' || e.key === 'a') vx = 0;
+    });
+
+    // Touch: tap to action, long-press not needed; on-screen pause button provided.
+    canvas.addEventListener('touchstart', (e)=>{
+      e.preventDefault();
+      // treat any tap as action
+      score += 1; scoreEl.textContent = score;
+    }, {passive:false});
+
+    // Pause button touch/click
+    pauseBtn.addEventListener('click', ()=> setPaused(!paused));
+    pauseBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); setPaused(!paused); }, {passive:false});
+
+    // Simple game loop
+    let last = performance.now();
+    function loop(t){
+      const dt = (t - last) / 1000; last = t;
+      if(!paused){
+        update(dt);
+        render();
+      }
+      requestAnimationFrame(loop);
+    }
+
+    function update(dt){
+      x += vx;
+      if(x < 0) x = 0;
+      if(x > w-20) x = w-20;
+      // increase score slowly as time passes
+      score += Math.floor(dt * 10);
+      scoreEl.textContent = score;
+    }
+
+    function render(){
+      ctx.clearRect(0,0,w,h);
+      // ground
+      ctx.fillStyle = '#333';
+      ctx.fillRect(0,h-40,w,40);
+      // player
+      ctx.fillStyle = '#0db';
+      ctx.fillRect(x,y,20,20);
+    }
+
+    // resize to fit width while keeping aspect
+    function fit(){
+      const maxW = Math.min(window.innerWidth-20, 800);
+      const scale = Math.min(1, maxW / 600);
+      canvas.style.width = Math.round(600*scale) + 'px';
+      canvas.style.height = Math.round(400*scale) + 'px';
+    }
+    window.addEventListener('resize', fit);
+    fit();
+
+    // start
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
