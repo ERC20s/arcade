@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Hello — Arcade starter</title>
+<style>
+  html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:#071827;color:#eaf6ff}
+  .game{display:flex;flex-direction:column;height:100%;align-items:center;justify-content:center}
+  canvas{background:#071827;border:2px solid #0f2a3b;border-radius:8px}
+  .hud{position:fixed;left:12px;top:12px;background:rgba(2,6,11,.5);padding:8px 10px;border-radius:8px;font-weight:600}
+  .hint{position:fixed;right:12px;top:12px;background:rgba(2,6,11,.5);padding:8px 10px;border-radius:8px;font-size:13px}
+  button{position:fixed;right:12px;bottom:12px;padding:8px 10px;border-radius:8px;border:0;background:#0f5273;color:#eaf6ff}
+</style>
+</head>
+<body>
+<div class="game">
+  <canvas id="c" width="480" height="320"></canvas>
+  <div class="hud">Score: <span id="score">0</span></div>
+  <div class="hint">Arrows to move, Tap to jump, P to pause</div>
+  <button id="pause">Pause</button>
+</div>
+<script>
+// Single-file, dependency-free micro-game (<=400 lines). Simple dodger: avoid falling squares.
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = canvas.width, H = canvas.height;
+let player = {x: W/2, y: H-20, w:28, h:8, vx:0};
+let gravity = 0.6, jump = -10;
+let obstacles = [], spawnTimer = 0;
+let score = 0, paused = false, gameOver = false;
+let keys = {};
+function reset(){player.x = W/2; player.vx=0; obstacles=[]; spawnTimer=0; score=0; paused=false; gameOver=false}
+function spawn(){let s = 12 + Math.random()*26; obstacles.push({x:Math.random()*(W-s), y:-s, s});}
+function update(){if(paused||gameOver) return; player.vx *= 0.9; player.x += player.vx; if(player.x<0) player.x=0; if(player.x+player.w>W) player.x=W-player.w;
+  // spawn obstacles
+  spawnTimer += 1 + Math.random()*0.4;
+  if(spawnTimer>30){spawn(); spawnTimer=0}
+  // move obstacles
+  for(let i=obstacles.length-1;i>=0;i--){let o=obstacles[i]; o.y += 2 + score*0.01; if(o.y>H){obstacles.splice(i,1); score+=1; document.getElementById('score').textContent = score}}
+  // apply controls
+  if(keys['ArrowLeft']) player.vx -= 0.7;
+  if(keys['ArrowRight']) player.vx += 0.7;
+}
+function render(){ctx.clearRect(0,0,W,H);
+  // player
+  ctx.fillStyle = '#7fe0ff'; ctx.fillRect(player.x, player.y, player.w, player.h);
+  // obstacles
+  ctx.fillStyle = '#ff7b7b'; for(let o of obstacles) ctx.fillRect(o.x,o.y,o.s,o.s);
+  if(paused){ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(0,0,W,H); ctx.fillStyle='#fff'; ctx.font='20px sans-serif'; ctx.fillText('PAUSED',W/2-38,H/2)}
+  if(gameOver){ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,0,W,H); ctx.fillStyle='#fff'; ctx.font='18px sans-serif'; ctx.fillText('GAME OVER — refresh to retry',W/2-110,H/2)}
+}
+function loop(){update(); render(); requestAnimationFrame(loop)}
+// input handlers
+window.addEventListener('keydown', e=>{keys[e.key]=true; if(e.key==='p' || e.key==='P'){paused=!paused; document.getElementById('pause').textContent = paused? 'Resume':'Pause'} if(e.key===' '||e.key==='Spacebar'){player.vx += jump*0.1}});
+window.addEventListener('keyup', e=>{keys[e.key]=false});
+// touch: tap to jump, drag left/right
+let touching=false, touchStartX=0;
+canvas.addEventListener('touchstart', e=>{e.preventDefault(); touching=true; touchStartX = e.touches[0].clientX; player.vx += jump*0.12});
+canvas.addEventListener('touchmove', e=>{e.preventDefault(); let dx = e.touches[0].clientX - touchStartX; player.x += dx*0.06; touchStartX = e.touches[0].clientX});
+canvas.addEventListener('touchend', e=>{touching=false});
+// pause button
+document.getElementById('pause').addEventListener('click', ()=>{paused=!paused; document.getElementById('pause').textContent = paused? 'Resume':'Pause'});
+// basic collision between player rect and obstacle rect
+function checkCollisions(){for(let o of obstacles){if(o.x < player.x+player.w && o.x+o.s > player.x && o.y < player.y+player.h && o.y+o.s > player.y){gameOver=true}}}
+// game tick with collision check
+function tick(){if(!paused && !gameOver){ // apply gravity-like subtle fall to keep player on bottom
+  // player stays near bottom; allow small bounce when hitting obstacle from top is not modelled
+}
+ checkCollisions(); setTimeout(tick,50)}
+// start
+reset(); loop(); tick();
+// window resize keeps canvas fixed size for simplicity; contributors may adjust
+// comments: keyboard uses Arrow keys, P toggles pause, touch: tap to jump, drag to move
+</script>
+</body>
+</html>
