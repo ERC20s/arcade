@@ -1,0 +1,184 @@
+<!--
+Title: Dodge
+Description: Survive as long as you can by dodging blocks falling from the top; score increases each second survived.
+Controls: Arrow keys or A/D to move left/right, Space to restart after game over, P to pause; touch-drag or tap left/right half of the screen to move, on-screen pause button, tap to restart.
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dodge</title>
+  <style>
+    html,body{height:100%;margin:0;font-family:sans-serif;background:#111;color:#eee}
+    canvas{display:block;background:#222;margin:0 auto;touch-action:none}
+    #hud{position:fixed;left:10px;top:10px;font-size:18px}
+    #pauseBtn{position:fixed;right:10px;top:10px;padding:8px 12px;background:#444;color:#fff;border-radius:6px;touch-action:none}
+    #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:28px;flex-direction:column;text-align:center}
+    #gameOver{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);color:#fff;font-size:24px;flex-direction:column;text-align:center;gap:8px}
+    button{font:inherit}
+  </style>
+</head>
+<body>
+  <div id="hud">Score: <span id="score">0</span></div>
+  <button id="pauseBtn" aria-pressed="false">Pause</button>
+  <div id="pauseOverlay" role="status" aria-hidden="true">Paused</div>
+  <div id="gameOver" role="status" aria-hidden="true">
+    <div>Game Over</div>
+    <div style="font-size:16px">Tap or press Space to restart</div>
+  </div>
+  <canvas id="c" width="600" height="400"></canvas>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    const gameOverEl = document.getElementById('gameOver');
+
+    const w = canvas.width, h = canvas.height;
+    const playerSize = 24;
+    let x, vx, score, elapsed, paused, over, blocks, spawnTimer, speed;
+
+    function reset(){
+      x = w/2 - playerSize/2;
+      vx = 0;
+      score = 0;
+      elapsed = 0;
+      paused = false;
+      over = false;
+      blocks = [];
+      spawnTimer = 0;
+      speed = 90;
+      scoreEl.textContent = score;
+      setPaused(false);
+      gameOverEl.style.display = 'none';
+      gameOverEl.setAttribute('aria-hidden', 'true');
+    }
+
+    function setPaused(v){
+      paused = v;
+      pauseOverlay.style.display = paused ? 'flex' : 'none';
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+      pauseBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+      pauseOverlay.setAttribute('aria-hidden', (!paused).toString());
+    }
+
+    function endGame(){
+      over = true;
+      gameOverEl.style.display = 'flex';
+      gameOverEl.setAttribute('aria-hidden', 'false');
+    }
+
+    // Keyboard controls
+    window.addEventListener('keydown', (e)=>{
+      if(over){
+        if(e.key === ' '){ reset(); }
+        return;
+      }
+      if(e.key === 'ArrowRight' || e.key === 'd') vx = 3;
+      if(e.key === 'ArrowLeft' || e.key === 'a') vx = -3;
+      if(e.key.toLowerCase() === 'p') setPaused(!paused);
+    });
+    window.addEventListener('keyup', (e)=>{
+      if(e.key === 'ArrowRight' || e.key === 'd') vx = 0;
+      if(e.key === 'ArrowLeft' || e.key === 'a') vx = 0;
+    });
+
+    // Touch: drag anywhere or tap left/right half to move; tap to restart on game over.
+    let dragging = false;
+    canvas.addEventListener('touchstart', (e)=>{
+      e.preventDefault();
+      if(over){ reset(); return; }
+      dragging = true;
+      const t = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const relX = (t.clientX - rect.left) / rect.width * w;
+      x = Math.min(Math.max(relX - playerSize/2, 0), w - playerSize);
+    }, {passive:false});
+    canvas.addEventListener('touchmove', (e)=>{
+      e.preventDefault();
+      if(!dragging || paused || over) return;
+      const t = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const relX = (t.clientX - rect.left) / rect.width * w;
+      x = Math.min(Math.max(relX - playerSize/2, 0), w - playerSize);
+    }, {passive:false});
+    canvas.addEventListener('touchend', (e)=>{ e.preventDefault(); dragging = false; }, {passive:false});
+
+    // Pause button
+    pauseBtn.addEventListener('click', ()=>{ if(!over) setPaused(!paused); });
+    pauseBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); if(!over) setPaused(!paused); }, {passive:false});
+
+    gameOverEl.addEventListener('click', reset);
+
+    function spawnBlock(){
+      const size = 20 + Math.random() * 24;
+      blocks.push({ x: Math.random() * (w - size), y: -size, size });
+    }
+
+    function update(dt){
+      x += vx;
+      if(x < 0) x = 0;
+      if(x > w - playerSize) x = w - playerSize;
+
+      elapsed += dt;
+      const newScore = Math.floor(elapsed);
+      if(newScore !== score){ score = newScore; scoreEl.textContent = score; }
+
+      speed += dt * 6; // increasing fall speed over time
+
+      spawnTimer -= dt;
+      if(spawnTimer <= 0){
+        spawnBlock();
+        spawnTimer = Math.max(0.9 - elapsed * 0.02, 0.35);
+      }
+
+      for(const b of blocks) b.y += speed * dt;
+      blocks = blocks.filter(b => b.y < h + 40);
+
+      const py = h - 40 - playerSize;
+      for(const b of blocks){
+        if(x < b.x + b.size && x + playerSize > b.x && py < b.y + b.size && py + playerSize > b.y){
+          endGame();
+          break;
+        }
+      }
+    }
+
+    function render(){
+      ctx.clearRect(0,0,w,h);
+      ctx.fillStyle = '#333';
+      ctx.fillRect(0,h-40,w,40);
+      ctx.fillStyle = '#e55';
+      for(const b of blocks) ctx.fillRect(b.x, b.y, b.size, b.size);
+      ctx.fillStyle = '#0db';
+      ctx.fillRect(x, h - 40 - playerSize, playerSize, playerSize);
+    }
+
+    let last = performance.now();
+    function loop(t){
+      const dt = Math.min((t - last) / 1000, 0.05); last = t;
+      if(!paused && !over){
+        update(dt);
+      }
+      render();
+      requestAnimationFrame(loop);
+    }
+
+    function fit(){
+      const maxW = Math.min(window.innerWidth-20, 800);
+      const scale = Math.min(1, maxW / 600);
+      canvas.style.width = Math.round(600*scale) + 'px';
+      canvas.style.height = Math.round(400*scale) + 'px';
+    }
+    window.addEventListener('resize', fit);
+    fit();
+
+    reset();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
