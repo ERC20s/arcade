@@ -1,0 +1,134 @@
+<!--
+Title: Browser Arcade Launcher
+Description: Root launcher listing games; each game lives at games/<name>/index.html.
+Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap to open on touch devices.
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Browser Arcade</title>
+  <style>
+    :root{ color-scheme: dark; }
+    html,body{
+      margin:0;
+      min-height:100%;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      background:#111;
+      color:#eee;
+    }
+    header{
+      padding:24px 16px 8px;
+      text-align:center;
+    }
+    header h1{ margin:0 0 4px; font-size:28px; }
+    header p{ margin:0; color:#aaa; font-size:14px; }
+    main{
+      max-width:720px;
+      margin:0 auto;
+      padding:16px;
+    }
+    ul#game-list{
+      list-style:none;
+      margin:16px 0;
+      padding:0;
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+      gap:12px;
+    }
+    a.game{
+      display:block;
+      padding:16px;
+      background:#1d1d1d;
+      color:#fff;
+      text-decoration:none;
+      border:1px solid #333;
+      border-radius:10px;
+      font-size:16px;
+      min-height:44px;
+      box-sizing:border-box;
+    }
+    a.game:hover, a.game:focus{
+      background:#2a2a2a;
+      outline:2px solid #0db;
+      outline-offset:2px;
+    }
+    section.empty{
+      padding:16px;
+      border:1px dashed #444;
+      border-radius:10px;
+      color:#aaa;
+      font-size:14px;
+    }
+    section.how-to{
+      margin-top:32px;
+      padding-top:16px;
+      border-top:1px solid #333;
+      color:#ccc;
+      font-size:14px;
+      line-height:1.5;
+    }
+    section.how-to h2{ font-size:16px; color:#eee; }
+    code{
+      background:#222;
+      padding:2px 5px;
+      border-radius:4px;
+      font-size:13px;
+    }
+    footer{
+      text-align:center;
+      padding:24px 16px;
+      color:#666;
+      font-size:12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Browser Arcade</h1>
+    <p>Small browser games, one folder each, zero dependencies, keyboard and touch.</p>
+  </header>
+
+  <main>
+    <!--
+      Game list: add one <li><a class="game" href="games/<name>/index.html">Title — one-line description</a></li>
+      per entry as games are merged. No games are merged yet, so the list starts empty
+      with a placeholder note below.
+    -->
+    <ul id="game-list">
+      <!-- Example entry (not a real game yet):
+      <li><a class="game" href="games/hello/index.html">Hello — starter game</a></li>
+      -->
+    </ul>
+
+    <section class="empty" id="empty-note">
+      No games are listed yet. Once a game is merged into <code>games/&lt;name&gt;/index.html</code>,
+      add a link for it above.
+    </section>
+
+    <section class="how-to">
+      <h2>Add a game to this launcher</h2>
+      <p>
+        Each game lives in its own folder: <code>games/&lt;name&gt;/index.html</code>,
+        a single self-contained file (inline CSS/JS, no build step, no external
+        dependencies) of at most 400 lines.
+      </p>
+      <p>
+        A minimal starting point is available at
+        <code>template/game-template/index.html</code>; copy it into your new game
+        folder and edit the metadata block and code. See <code>CONTRIBUTING.md</code>
+        for the full checklist (required metadata header, keyboard + touch controls,
+        score display, pause overlay).
+      </p>
+      <p>
+        Once your game is merged, add one line to the list above:
+        <code>&lt;a class="game" href="games/&lt;name&gt;/index.html"&gt;Title — one-line description&lt;/a&gt;</code>
+      </p>
+    </section>
+  </main>
+
+  <footer>Browser Arcade — shared launcher</footer>
+</body>
+</html>
