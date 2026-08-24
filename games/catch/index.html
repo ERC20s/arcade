@@ -1,0 +1,193 @@
+<!--
+Title: Catch
+Description: Move the paddle to catch falling squares before they hit the ground; the game speeds up over time.
+Controls: Arrow keys or A/D to move, P to pause; drag/tap on the canvas to move the paddle on touch, on-screen pause button.
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Catch</title>
+  <style>
+    html,body{height:100%;margin:0;font-family:system-ui,sans-serif;background:#111;color:#eee}
+    canvas{display:block;background:#222;margin:0 auto;touch-action:none}
+    #hud{position:fixed;left:10px;top:10px;font-size:18px}
+    #lives{position:fixed;left:10px;top:34px;font-size:14px;color:#aaa}
+    #pauseBtn{position:fixed;right:10px;top:10px;padding:8px 12px;background:#444;color:#fff;border-radius:6px;touch-action:none;min-height:44px;min-width:44px}
+    #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(0,0,0,0.6);color:#fff;font-size:28px}
+    #gameOverOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(0,0,0,0.75);color:#fff;font-size:24px;text-align:center}
+    button{font:inherit;cursor:pointer;border:none}
+    #restartBtn{margin-top:16px;padding:10px 16px;background:#0db;color:#111;border-radius:6px;min-height:44px}
+  </style>
+</head>
+<body>
+  <div id="hud">Score: <span id="score">0</span></div>
+  <div id="lives">Lives: <span id="livesVal">3</span></div>
+  <button id="pauseBtn" aria-pressed="false">Pause</button>
+  <div id="pauseOverlay" role="status" aria-hidden="true">Paused</div>
+  <div id="gameOverOverlay" role="status" aria-hidden="true">
+    <div>Game Over</div>
+    <div id="finalScore"></div>
+    <button id="restartBtn">Restart</button>
+  </div>
+  <canvas id="c" width="600" height="400"></canvas>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('livesVal');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const finalScoreEl = document.getElementById('finalScore');
+    const restartBtn = document.getElementById('restartBtn');
+
+    let w = canvas.width, h = canvas.height;
+    const paddleW = 70, paddleH = 14;
+    let paddleX = w/2 - paddleW/2;
+    let paddleVX = 0;
+    const paddleSpeed = 6;
+
+    let score = 0;
+    let lives = 3;
+    let paused = false;
+    let gameOver = false;
+
+    const size = 18;
+    let fallX = 0, fallY = 0, fallSpeed = 0;
+    let baseSpeed = 120; // px/sec
+    let speedRamp = 0;
+
+    function resetFaller(){
+      fallX = Math.random() * (w - size);
+      fallY = -size;
+      fallSpeed = baseSpeed + speedRamp;
+    }
+
+    function setPaused(v){
+      if(gameOver) return;
+      paused = v;
+      pauseOverlay.style.display = paused ? 'flex' : 'none';
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+      pauseBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+      pauseOverlay.setAttribute('aria-hidden', (!paused).toString());
+    }
+
+    function setGameOver(){
+      gameOver = true;
+      finalScoreEl.textContent = 'Score: ' + score;
+      gameOverOverlay.style.display = 'flex';
+      gameOverOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function restart(){
+      score = 0; lives = 3; speedRamp = 0; gameOver = false;
+      scoreEl.textContent = score;
+      livesEl.textContent = lives;
+      gameOverOverlay.style.display = 'none';
+      gameOverOverlay.setAttribute('aria-hidden', 'true');
+      paddleX = w/2 - paddleW/2;
+      resetFaller();
+      setPaused(false);
+    }
+
+    // Keyboard
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === 'ArrowRight' || e.key === 'd') paddleVX = paddleSpeed;
+      if(e.key === 'ArrowLeft' || e.key === 'a') paddleVX = -paddleSpeed;
+      if(e.key.toLowerCase() === 'p') setPaused(!paused);
+    });
+    window.addEventListener('keyup', (e)=>{
+      if(e.key === 'ArrowRight' || e.key === 'd') paddleVX = 0;
+      if(e.key === 'ArrowLeft' || e.key === 'a') paddleVX = 0;
+    });
+
+    // Touch: drag/tap on canvas moves paddle toward touch x
+    function moveToClientX(clientX){
+      const rect = canvas.getBoundingClientRect();
+      const scale = w / rect.width;
+      const x = (clientX - rect.left) * scale;
+      paddleX = Math.min(Math.max(x - paddleW/2, 0), w - paddleW);
+    }
+    canvas.addEventListener('touchstart', (e)=>{
+      e.preventDefault();
+      if(e.touches[0]) moveToClientX(e.touches[0].clientX);
+    }, {passive:false});
+    canvas.addEventListener('touchmove', (e)=>{
+      e.preventDefault();
+      if(e.touches[0]) moveToClientX(e.touches[0].clientX);
+    }, {passive:false});
+
+    pauseBtn.addEventListener('click', ()=> setPaused(!paused));
+    pauseBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); setPaused(!paused); }, {passive:false});
+    restartBtn.addEventListener('click', restart);
+    restartBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); restart(); }, {passive:false});
+
+    let last = performance.now();
+    function loop(t){
+      const dt = (t - last) / 1000; last = t;
+      if(!paused && !gameOver){
+        update(dt);
+        render();
+      }
+      requestAnimationFrame(loop);
+    }
+
+    function update(dt){
+      paddleX += paddleVX;
+      if(paddleX < 0) paddleX = 0;
+      if(paddleX > w - paddleW) paddleX = w - paddleW;
+
+      fallY += fallSpeed * dt;
+
+      const caught = fallY + size >= h - paddleH - 4 &&
+                     fallY <= h - 4 &&
+                     fallX + size > paddleX &&
+                     fallX < paddleX + paddleW;
+
+      if(caught){
+        score += 1;
+        scoreEl.textContent = score;
+        speedRamp += 8;
+        resetFaller();
+      } else if(fallY > h){
+        lives -= 1;
+        livesEl.textContent = lives;
+        if(lives <= 0){
+          setGameOver();
+        } else {
+          resetFaller();
+        }
+      }
+    }
+
+    function render(){
+      ctx.clearRect(0,0,w,h);
+      // ground line
+      ctx.fillStyle = '#333';
+      ctx.fillRect(0,h-4,w,4);
+      // paddle
+      ctx.fillStyle = '#0db';
+      ctx.fillRect(paddleX, h - paddleH - 4, paddleW, paddleH);
+      // falling square
+      ctx.fillStyle = '#f5a623';
+      ctx.fillRect(fallX, fallY, size, size);
+    }
+
+    function fit(){
+      const maxW = Math.min(window.innerWidth-20, 800);
+      const scale = Math.min(1, maxW / 600);
+      canvas.style.width = Math.round(600*scale) + 'px';
+      canvas.style.height = Math.round(400*scale) + 'px';
+    }
+    window.addEventListener('resize', fit);
+    fit();
+
+    resetFaller();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
