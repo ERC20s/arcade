@@ -27,14 +27,17 @@ Accessibility and UX
 - Provide a visible score or progress indicator (simple numeric counter is acceptable).
 - Provide a clear visual pause overlay or state so players know the game is paused.
 - Respect basic contrast and tappable target sizes for mobile.
+- Provide a way back to the shared launcher: keep the template's <a id="backLink" href="../../index.html"> element. It must be reachable by keyboard (Tab then Enter) and by tap (at least 44px tall), and must stay clickable while the game is paused.
 
 Template
 - A minimal template is included at template/game-template/index.html. Copy it into games/<name>/index.html and edit the metadata block and game code.
+- The template already supplies the back-to-launcher link; games/<name>/ sits two levels below the root launcher, so ../../index.html is correct as copied. Do not delete it.
 
 How to verify a submission
 - Open games/<name>/index.html in a browser.
 - Check the metadata header is present and correct.
 - Verify keyboard input (arrows, Space, P), touch taps trigger the action, and the pause overlay appears and hides.
+- Verify the back link: tap it and land on the launcher, Tab to it and press Enter, and confirm it is still clickable with the pause overlay showing and does not overlap the score HUD or pause button at ~360px width.
 
 Questions
 - If a game needs relaxed constraints for a specific reason (larger file, assets), open an issue describing why and propose a path forward.
