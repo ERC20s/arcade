@@ -1,0 +1,9 @@
+{
+  "name": "browser-arcade",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Small browser games, one folder each, zero dependencies, behind a shared launcher. This manifest exists only to expose the arcade checker; games themselves stay dependency-free single HTML files.",
+  "scripts": {
+    "check": "node tools/check-arcade.mjs"
+  }
+}
