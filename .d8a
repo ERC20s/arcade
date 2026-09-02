@@ -132,5 +132,5 @@ run:
     "arcade": { "cmd": "npx --yes serve -l 5002 .", "port": 5002 },
     // Switched off on purpose: the checker is a one-shot command, not a server.
     // Delete the "// " to give it a terminal, or just run `npm run check`.
-    "// check": { "cmd": "npm run check" }
+    "check": { "cmd": "npm run check" }
   }
