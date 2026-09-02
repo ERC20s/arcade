@@ -43,8 +43,20 @@ Template
 - The template's global keydown handler stands down while a link or button has focus, so Tab, Enter and Space keep working on the back link and the pause button. If you rewrite the input handling, preserve that guard.
 - Everything else is still on you: the template is a starting point, not proof of compliance, and your game still needs the launcher list entry described above before it can be merged.
 
+External assets checker
+- The archive checker scans every launcher (index.html), game (games/<name>/index.html) and the template (template/game-template/index.html) for absolute remote URLs in common resource attributes and in @import rules inside <style> blocks.
+- The checker flags remote URLs that begin with http:, https:, or protocol-relative // found in:
+  - <script src=...>
+  - <link rel="stylesheet" href=...>
+  - <img src=...>, <img srcset=...>, <source src=...>
+  - <audio src=...>, <video src=...>, <track src=...>
+  - <iframe src=...>, <embed src=...>, <object data=...>
+  - @import rules inside <style> blocks
+- Allowed: data:, blob: URIs and same-folder relative paths (no leading protocol and no leading //). Commented-out HTML (<!-- -->) is ignored by the checker.
+- This check is conservative and focuses on the common attributes reviewers reported; it is not a full HTML parser. If you hit a false positive, open an issue describing the exact snippet and the suggested improvement.
+
 How to verify a submission
-- Run npm run check from the repository root (Node 18 or newer; no install, no dependencies). It re-checks the launcher links, the metadata header, the back link, the 400-line limit and the no-extra-source-files rule for every game and for the template, prints one line per problem and exits non-zero. It is a first pass, not a replacement for the manual checks below.
+- Run npm run check from the repository root (Node 18 or newer; no install, no dependencies). It re-checks the launcher links, the metadata header, the back link, the 400-line limit, the no-extra-source-files rule and remote-asset scanning for every game and for the template, prints one line per problem and exits non-zero. It is a first pass, not a replacement for the manual checks below.
 - Serve the repository root (see README.md) and open the launcher, not the game file directly, so relative links behave as they will after merge.
 - Check the metadata header is present and correct.
 - Check the launcher lists the game: the new <li> is inside <ul id="game-list">, the link opens games/<name>/index.html, and the title and description match the metadata header.

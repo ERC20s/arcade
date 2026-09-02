@@ -20,6 +20,12 @@
  *   Every game, additionally
  *     - it is listed in the launcher and the link text starts with its Title
  *
+ *   Additionally: a focused external-asset detector flags absolute remote
+ *   URLs (http:, https:, or protocol-relative //) in common resource
+ *   attributes and @import inside <style> blocks. Values that start with
+ *   data:, blob:, or are same-folder relative (no leading protocol or //) are
+ *   allowed. Commented HTML (<!-- -->) is ignored and line numbers are kept.
+ *
  * Every problem prints one line as `path:line: message`; a clean run prints a
  * short summary. The exit code is 0 when clean and 1 when anything failed.
  */
@@ -111,14 +117,18 @@ function readLauncher() {
   while ((m = anchor.exec(block))) {
     if (inRanges(skip, m.index)) continue; // an example inside a comment is not an entry
     const attrs = m[1];
-    const href = (attrs.match(/\bhref="([^"]*)"/i) || [])[1] || "";
+    const href = (attrs.match(/\bhref=("|')([^"']*)\1/i) || [])[2] || "";
     entries.push({
       href,
       label: text(m[2]),
-      hasGameClass: /\bclass="[^"]*\bgame\b[^"]*"/i.test(attrs),
+      hasGameClass: /\bclass=("|')[^"']*\bgame\b[^"']*\1/i.test(attrs),
       line: lineOf(html, blockStart + m.index)
     });
   }
+
+  // Scan launcher for remote assets as well
+  scanForRemoteAssets(LAUNCHER, html);
+
   return { entries, ok: true };
 }
 
@@ -130,24 +140,24 @@ function checkLauncherEntries(entries) {
       continue;
     }
     if (!entry.hasGameClass) {
-      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is missing class="game"`);
+      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is missing class="game"");
     }
     if (/^(?:[a-z]+:)?\/\//i.test(entry.href) || entry.href.startsWith("#")) {
-      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is not a path to a game in this repository`);
+      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is not a path to a game in this repository");
       continue;
     }
     const rel = entry.href.replace(/^\.\//, "").split(/[?#]/)[0];
     if (seen.has(rel)) {
-      fail(LAUNCHER, entry.line, `launcher lists "${rel}" twice (first at line ${seen.get(rel)})`);
+      fail(LAUNCHER, entry.line, `launcher lists "${rel}" twice (first at line ${seen.get(rel)})");
     } else {
       seen.set(rel, entry.line);
     }
     if (!existsSync(abs(rel))) {
-      fail(LAUNCHER, entry.line, `dead launcher link: "${rel}" does not exist on disk`);
+      fail(LAUNCHER, entry.line, `dead launcher link: "${rel}" does not exist on disk");
       continue;
     }
     if (!/^games\/[^/]+\/index\.html$/.test(rel)) {
-      fail(LAUNCHER, entry.line, `launcher link "${rel}" should point at games/<name>/index.html`);
+      fail(LAUNCHER, entry.line, `launcher link "${rel}" should point at games/<name>/index.html");
     }
   }
   return seen;
@@ -158,7 +168,7 @@ function checkLauncherEntries(entries) {
 // The metadata block: the file must OPEN with the HTML comment carrying the
 // three exact labels CONTRIBUTING.md requires.
 function checkMetadata(rel, html) {
-  const head = html.replace(/^﻿/, "").trimStart();
+  const head = html.replace(/^\ufeff/, "").trimStart();
   if (!head.startsWith("<!--")) {
     fail(rel, 1, "file does not start with the required metadata comment (<!-- Title: ... -->)");
     return null;
@@ -172,7 +182,7 @@ function checkMetadata(rel, html) {
   const fields = {};
   for (const label of ["Title", "Description", "Controls"]) {
     const m = block.match(new RegExp("^\\s*" + label + ":\\s*(\\S.*?)\\s*$", "m"));
-    if (!m) fail(rel, 1, `metadata comment is missing a non-empty "${label}:" field`);
+    if (!m) fail(rel, 1, `metadata comment is missing a non-empty "${label}:" field");
     else fields[label] = m[1];
   }
   return fields;
@@ -198,6 +208,95 @@ function checkFolder(rel) {
   }
 }
 
+// New: focused external-asset detector
+function scanForRemoteAssets(rel, html) {
+  const ranges = commentRanges(html);
+
+  function isRemote(url) {
+    if (!url) return false;
+    const s = url.trim();
+    if (/^data:/i.test(s)) return false;
+    if (/^blob:/i.test(s)) return false;
+    return /^(?:https?:|\/\/)/i.test(s);
+  }
+
+  function reportAt(index, msg) {
+    if (inRanges(ranges, index)) return;
+    const line = lineOf(html, index);
+    fail(rel, line, msg);
+  }
+
+  // script src
+  const scriptRe = /<script\b[^>]*\bsrc\s*=\s*(['"])(.*?)\1/gi;
+  let m;
+  while ((m = scriptRe.exec(html))) {
+    const url = m[2];
+    const idx = m.index + m[0].indexOf(m[2]);
+    if (isRemote(url)) reportAt(idx, `remote URL in <script src>: ${url}`);
+  }
+
+  // link rel=stylesheet href
+  const linkRe = /<link\b([^>]*)>/gi;
+  while ((m = linkRe.exec(html))) {
+    const attrs = m[1];
+    if (!/\brel\s*=\s*(['"]).*?stylesheet.*?\1/i.test(attrs)) continue;
+    const hm = attrs.match(/\bhref\s*=\s*(['"])(.*?)\1/i);
+    if (!hm) continue;
+    const url = hm[2];
+    const idx = m.index + m[0].indexOf(hm[0]) + hm[0].indexOf(hm[2]);
+    if (isRemote(url)) reportAt(idx, `remote URL in <link rel=stylesheet href>: ${url}`);
+  }
+
+  // src and similar attributes on common tags
+  const attrPatterns = ["img", "audio", "video", "source", "track", "iframe", "embed"];
+  for (const tag of attrPatterns) {
+    const re = new RegExp(`<${tag}\\b[^>]*\\bsrc\\s*=\\s*(['\\\"])(.*?)\\1`, "gi");
+    while ((m = re.exec(html))) {
+      const url = m[2];
+      const idx = m.index + m[0].indexOf(m[2]);
+      if (isRemote(url)) reportAt(idx, `remote URL in <${tag} src>: ${url}`);
+    }
+  }
+
+  // img srcset (may appear on <img> or <source>)
+  const srcsetRe = /\bsrcset\s*=\s*(['"])(.*?)\1/gi;
+  while ((m = srcsetRe.exec(html))) {
+    const val = m[2];
+    const idxBase = m.index + m[0].indexOf(m[2]);
+    // srcset: comma-separated list of URLs with optional descriptors
+    const parts = val.split(/\s*,\s*/);
+    let offset = 0;
+    for (const p of parts) {
+      const url = p.split(/\s+/)[0];
+      const idx = idxBase + val.indexOf(p, offset);
+      offset += p.length + 1;
+      if (isRemote(url)) reportAt(idx, `remote URL in srcset: ${url}`);
+    }
+  }
+
+  // object data=
+  const objectRe = /<object\b[^>]*\bdata\s*=\s*(['"])(.*?)\1/gi;
+  while ((m = objectRe.exec(html))) {
+    const url = m[2];
+    const idx = m.index + m[0].indexOf(m[2]);
+    if (isRemote(url)) reportAt(idx, `remote URL in <object data>: ${url}`);
+  }
+
+  // @import inside <style>
+  const styleRe = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+  while ((m = styleRe.exec(html))) {
+    const block = m[1];
+    const blockStart = m.index + m[0].indexOf(block);
+    const importRe = /@import\s+(?:url\()?(?:['"])?([^'"\)\s;]+)(?:['"])?\)?/gi;
+    let im;
+    while ((im = importRe.exec(block))) {
+      const url = im[1];
+      const idx = blockStart + im.index + im[0].indexOf(im[1]);
+      if (isRemote(url)) reportAt(idx, `remote URL in @import: ${url}`);
+    }
+  }
+}
+
 function checkGameFile(rel, { registration }) {
   if (!existsSync(abs(rel))) {
     fail(rel, 0, "expected file is missing");
@@ -205,6 +304,9 @@ function checkGameFile(rel, { registration }) {
   }
   const html = read(rel);
   const fields = checkMetadata(rel, html);
+
+  // Scan for remote assets in every game and template too
+  scanForRemoteAssets(rel, html);
 
   const lines = countLines(html);
   if (lines > MAX_LINES) {
