@@ -39,7 +39,9 @@ Accessibility and UX
 
 Template
 - A minimal template is included at template/game-template/index.html. Copy it into games/<name>/index.html and edit the metadata block and game code.
-- The template is a starting point, not proof of compliance: whatever it contains, your game still needs the back-to-launcher link and the launcher list entry described above before it can be merged.
+- The template now ships with the back-to-launcher link already in place (<a class="back" href="../../index.html">), sized as a 44x44 tap target, with a visible focus outline and above the pause overlay. Keep it when you copy the template, and keep its href pointing at ../../index.html, which resolves to the root launcher from games/<name>/index.html.
+- The template's global keydown handler stands down while a link or button has focus, so Tab, Enter and Space keep working on the back link and the pause button. If you rewrite the input handling, preserve that guard.
+- Everything else is still on you: the template is a starting point, not proof of compliance, and your game still needs the launcher list entry described above before it can be merged.
 
 How to verify a submission
 - Serve the repository root (see README.md) and open the launcher, not the game file directly, so relative links behave as they will after merge.
