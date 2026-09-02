@@ -43,15 +43,21 @@ Template
 - The template's global keydown handler stands down while a link or button has focus, so Tab, Enter and Space keep working on the back link and the pause button. If you rewrite the input handling, preserve that guard.
 - Everything else is still on you: the template is a starting point, not proof of compliance, and your game still needs the launcher list entry described above before it can be merged.
 
+External asset checker
+- The repository includes a zero-dependency checker (tools/check-arcade.mjs) that now looks for narrowly-scoped remote asset URLs so we can enforce the "no CDN or external runtime" rule automatically.
+- The checker inspects these HTML locations only: <img src>, <script src>, <audio src>, <video src>, <source src>, and <link href> when the link's attributes include a stylesheet relation. It also scans @import rules inside <style> blocks. It does not attempt to parse JavaScript or inline style attribute contents.
+- The checker flags only absolute remote URLs that start with "http:", "https:" or are protocol-relative ("//"). It permits data:, blob:, and same-folder relative paths (./, ../ or bare filenames).
+- Matches that are inside HTML comments are ignored. Problems are reported as file:line: message lines and the checker exits with a non-zero status when any are found.
+
 How to verify a submission
-- Run npm run check from the repository root (Node 18 or newer; no install, no dependencies). It re-checks the launcher links, the metadata header, the back link, the 400-line limit and the no-extra-source-files rule for every game and for the template, prints one line per problem and exits non-zero. It is a first pass, not a replacement for the manual checks below.
+- Run npm run check from the repository root (Node 18 or newer; no install, no dependencies). It re-checks the launcher links, the metadata header, the back link, the 400-line limit, the no-extra-source-files rule and the external-asset detector for every game and for the template, prints one line per problem and exits non-zero. It is a first pass, not a replacement for the manual checks below.
 - Serve the repository root (see README.md) and open the launcher, not the game file directly, so relative links behave as they will after merge.
 - Check the metadata header is present and correct.
 - Check the launcher lists the game: the new <li> is inside <ul id="game-list">, the link opens games/<name>/index.html, and the title and description match the metadata header.
 - Verify keyboard input (arrows, Space, P), touch taps trigger the action, and the pause overlay appears and hides.
 - Verify the back link both ways: Tab to it (focus must be visible), press Enter and land on the launcher; then tap it on a touch screen or a narrow window. Repeat once while the game is paused.
 - Check index.html is <= 400 lines and that the folder holds no extra source files.
-- A submission that fails the launcher entry or the back link is not merged: the game would be unreachable from the arcade, or a dead end once opened.
+- The external asset detector will report remote URLs such as <script src="https://example.com/foo.js">; allowed forms include <img src="data:image/png;...">, <audio src="blob:..."> and <img src="image.png"> (same-folder relative). If the detector flags something unexpected, open an issue so we can evaluate and widen the scanner if appropriate.
 
 Questions
 - If a game needs relaxed constraints for a specific reason (larger file, assets), open an issue describing why and propose a path forward.

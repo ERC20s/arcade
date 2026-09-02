@@ -146,7 +146,7 @@ function checkLauncherEntries(entries) {
       fail(LAUNCHER, entry.line, `dead launcher link: "${rel}" does not exist on disk`);
       continue;
     }
-    if (!/^games\/[^/]+\/index\.html$/.test(rel)) {
+    if (!/^games\/[^^/]+\/index\.html$/.test(rel)) {
       fail(LAUNCHER, entry.line, `launcher link "${rel}" should point at games/<name>/index.html`);
     }
   }
@@ -158,7 +158,7 @@ function checkLauncherEntries(entries) {
 // The metadata block: the file must OPEN with the HTML comment carrying the
 // three exact labels CONTRIBUTING.md requires.
 function checkMetadata(rel, html) {
-  const head = html.replace(/^﻿/, "").trimStart();
+  const head = html.replace(/^\ufeff/, "").trimStart();
   if (!head.startsWith("<!--")) {
     fail(rel, 1, "file does not start with the required metadata comment (<!-- Title: ... -->)");
     return null;
@@ -265,6 +265,76 @@ for (const rel of games) checkGameFile(rel, { registration });
 // game is copied from, so a break there breaks every future submission.
 checkGameFile(TEMPLATE, { registration: null });
 
+// New scan: detect narrowly-scoped external asset URLs that violate the
+// zero-dependency rule. This scanner is intentionally small and conservative:
+// it looks only at a short whitelist of tags/attributes and @import inside
+// <style> blocks, skips commented HTML, and flags only http:, https: and //
+// protocol remote URLs. Allowed: data:, blob:, and same-folder relative paths
+// (./, ../ or bare filenames).
+function scanForExternalAssets(rel, html) {
+  if (!html) return;
+  const skip = commentRanges(html);
+  const externalRE = /^(?:https?:|\\\\)\\/i; // placeholder, will not be used
+  // Tags and attributes we inspect
+  const specs = [
+    { tag: 'img', attr: 'src' },
+    { tag: 'script', attr: 'src' },
+    { tag: 'audio', attr: 'src' },
+    { tag: 'video', attr: 'src' },
+    { tag: 'source', attr: 'src' },
+    { tag: 'link', attr: 'href', relMustContain: /stylesheet/i }
+  ];
+  for (const s of specs) {
+    const tag = s.tag;
+    // capture attributes block and the attr value (double, single or unquoted)
+    const re = new RegExp('<' + tag + '\\b([^>]*)\\b' + s.attr + '\\s*=\\s*(?:"([^"]*)"|\'([^']*)\'|([^>\\s]+))', 'gi');
+    let m;
+    while ((m = re.exec(html))) {
+      const idx = m.index;
+      if (inRanges(skip, idx)) continue;
+      const attrs = m[1] || '';
+      if (s.relMustContain && !s.relMustContain.test(attrs)) continue;
+      const url = m[2] || m[3] || m[4] || '';
+      if (!url) continue;
+      // Flag only http:, https: or //
+      if (/^(?:https?:|\\/\\/)/i.test(url)) {
+        const line = lineOf(html, idx + (m[0] ? m[0].indexOf(url) : 0));
+        fail(rel, line, `external asset URL in <${tag} ${s.attr}=> ${url} — no remote assets (http(s) or //) allowed`);
+      }
+    }
+  }
+  // <style> blocks: scan @import rules
+  const styleRe = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+  let sm;
+  while ((sm = styleRe.exec(html))) {
+    const styleStart = sm.index;
+    if (inRanges(skip, styleStart)) continue;
+    const body = sm[1] || '';
+    const importRe = /@import\s+(?:url\()?\s*(?:"([^"]+)"|'([^']+)'|([^\)\s;]+))\s*\)?/gi;
+    let im;
+    while ((im = importRe.exec(body))) {
+      const url = im[1] || im[2] || im[3] || '';
+      if (!url) continue;
+      if (/^(?:https?:|\\/\\/)/i.test(url)) {
+        const absIdx = styleStart + im.index;
+        const line = lineOf(html, absIdx);
+        fail(rel, line, `external @import URL in <style>: ${url} — no remote assets (http(s) or //) allowed`);
+      }
+    }
+  }
+}
+
+// Run the scan over the launcher, every game, and the template. We intentionally
+// don't attempt to find external references inside inline styles on attributes
+// or inside JS strings; that would require full parsing and risks false
+// positives. Keep it focused and easy to reason about.
+const toScan = new Set([LAUNCHER, TEMPLATE, ...games]);
+for (const rel of toScan) {
+  if (!existsSync(abs(rel))) continue;
+  const html = read(rel);
+  scanForExternalAssets(rel, html);
+}
+
 if (launcher.ok) checked.unshift(`${LAUNCHER} (launcher, ${launcher.entries.length} entr${launcher.entries.length === 1 ? "y" : "ies"})`);
 
 if (problems.length) {
@@ -273,4 +343,4 @@ if (problems.length) {
   process.exit(1);
 }
 
-console.log(`arcade check passed — ${checked.join(", ")}${games.length ? "" : "; no games merged yet"}.`);
+console.log(`arcade check passed — ${checked.join(", ")} ${games.length ? "" : "; no games merged yet"}.`);
