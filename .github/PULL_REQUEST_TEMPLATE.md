@@ -17,6 +17,7 @@ Checklist for contributors
 - [ ] Touch support provided or noted (tap for action, an on-screen pause button or two-finger tap)
 - [ ] Visible score or progress indicator included
 - [ ] Pause state clearly visible and toggled by the required control
+- [ ] Back-to-launcher link present (the template's <a id="backLink" href="../../index.html">), reachable by Tab/Enter and by tap, and still clickable while paused
 - [ ] Tested in desktop and mobile browsers; list the user agent/browser used for verification
 - [ ] Short controls summary and one-line gameplay description included in the PR description
 - [ ] Optional: attach a screenshot or short GIF showing gameplay

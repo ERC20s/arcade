@@ -1,7 +1,7 @@
 <!--
 Title: Template Runner
 Description: Minimal runner scaffold demonstrating keyboard + touch, score and pause.
-Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-screen pause button.
+Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-screen pause button. Tab/Enter or tap the bottom-left "Arcade" link to return to the launcher.
 -->
 
 <!doctype html>
@@ -15,7 +15,18 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
     canvas{display:block;background:#222;margin:0 auto}
     #hud{position:fixed;left:10px;top:10px;font-size:18px}
     #pauseBtn{position:fixed;right:10px;top:10px;padding:8px 12px;background:#444;color:#fff;border-radius:6px;touch-action:none}
-    #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:28px}
+    #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:28px;z-index:1}
+    /* Back to the shared launcher: real <a href>, so Tab/Enter work with no script.
+       Bottom-left keeps it clear of #hud (left/top) and #pauseBtn (right/top);
+       z-index above #pauseOverlay keeps it reachable while paused. */
+    #backLink{
+      position:fixed;left:10px;bottom:10px;z-index:2;
+      display:inline-flex;align-items:center;
+      min-height:44px;box-sizing:border-box;padding:8px 14px;
+      background:#1d1d1d;color:#fff;text-decoration:none;
+      border:1px solid #333;border-radius:8px;font-size:14px;
+    }
+    #backLink:hover, #backLink:focus{background:#2a2a2a;outline:2px solid #0db;outline-offset:2px}
     button{font:inherit}
   </style>
 </head>
@@ -24,6 +35,8 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
   <button id="pauseBtn" aria-pressed="false">Pause</button>
   <div id="pauseOverlay" role="status" aria-hidden="true">Paused</div>
   <canvas id="c" width="600" height="400"></canvas>
+  <!-- Both template/game-template/ and games/<name>/ sit two levels below the root launcher. -->
+  <a id="backLink" href="../../index.html">&#8592; Arcade</a>
 
   <script>
     // Minimal game scaffold: a square that moves horizontally and a score that increases.
