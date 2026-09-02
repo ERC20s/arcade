@@ -31,10 +31,18 @@ Accessibility and UX
 Template
 - A minimal template is included at template/game-template/index.html. Copy it into games/<name>/index.html and edit the metadata block and game code.
 
+Register your game in the launcher
+- A game folder alone is not reachable: the root index.html is the only place that links games, and it is hand-maintained (there is no manifest file).
+- Add exactly one line inside the <ul id="game-list"> list in index.html, in the same pull request as the game:
+  <li><a class="game" href="games/<name>/index.html">Title — one-line description</a></li>
+- Use the same Title and Description as the metadata header of your game, and keep class="game" on the link: the launcher counts links matching #game-list a.game and hides the "No games are listed yet." note automatically once there is at least one. Do not delete that note by hand.
+- Keep the list alphabetical by title so the launcher stays easy to scan.
+
 How to verify a submission
 - Open games/<name>/index.html in a browser.
 - Check the metadata header is present and correct.
 - Verify keyboard input (arrows, Space, P), touch taps trigger the action, and the pause overlay appears and hides.
+- Open the root index.html and check the new link appears in the game list, opens the game, and that the "No games are listed yet." note is gone.
 
 Questions
 - If a game needs relaxed constraints for a specific reason (larger file, assets), open an issue describing why and propose a path forward.
