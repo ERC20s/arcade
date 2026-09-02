@@ -35,6 +35,11 @@ How to verify a submission
 - Open games/<name>/index.html in a browser.
 - Check the metadata header is present and correct.
 - Verify keyboard input (arrows, Space, P), touch taps trigger the action, and the pause overlay appears and hides.
+- Watch the score for about ten seconds of idle play: a time-based score must rise steadily, not stay at 0 (a per-frame `Math.floor(dt * 10)` truncates to 0 at 60 fps — accumulate a float and display `Math.floor` of it).
+- Pause, then hammer Space and tap the canvas: the score must not move and the player must not move while the overlay is up.
+- Press Pause with the mouse, then press Space: the score must not change and pause must not toggle again (blur the pause button after click).
+- Hold an arrow key and press Space or the other arrow: arrows and Space must not scroll the page (call preventDefault for the keys the game handles), and releasing one direction key must not cancel the other.
+- Motion must be time based, not per frame: integrate with `x += vx * dt` (vx in pixels per second) and clamp dt so a background tab does not teleport the player. On a 120 Hz display the game must run at the same speed as on 60 Hz.
 
 Questions
 - If a game needs relaxed constraints for a specific reason (larger file, assets), open an issue describing why and propose a path forward.
