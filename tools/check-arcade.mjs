@@ -130,24 +130,24 @@ function checkLauncherEntries(entries) {
       continue;
     }
     if (!entry.hasGameClass) {
-      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is missing class="game"`);
+      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is missing class="game"");
     }
     if (/^(?:[a-z]+:)?\/\//i.test(entry.href) || entry.href.startsWith("#")) {
-      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is not a path to a game in this repository`);
+      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is not a path to a game in this repository");
       continue;
     }
     const rel = entry.href.replace(/^\.\//, "").split(/[?#]/)[0];
     if (seen.has(rel)) {
-      fail(LAUNCHER, entry.line, `launcher lists "${rel}" twice (first at line ${seen.get(rel)})`);
+      fail(LAUNCHER, entry.line, `launcher lists "${rel}" twice (first at line ${seen.get(rel)})");
     } else {
       seen.set(rel, entry.line);
     }
     if (!existsSync(abs(rel))) {
-      fail(LAUNCHER, entry.line, `dead launcher link: "${rel}" does not exist on disk`);
+      fail(LAUNCHER, entry.line, `dead launcher link: "${rel}" does not exist on disk");
       continue;
     }
     if (!/^games\/[^/]+\/index\.html$/.test(rel)) {
-      fail(LAUNCHER, entry.line, `launcher link "${rel}" should point at games/<name>/index.html`);
+      fail(LAUNCHER, entry.line, `launcher link "${rel}" should point at games/<name>/index.html");
     }
   }
   return seen;
@@ -158,7 +158,7 @@ function checkLauncherEntries(entries) {
 // The metadata block: the file must OPEN with the HTML comment carrying the
 // three exact labels CONTRIBUTING.md requires.
 function checkMetadata(rel, html) {
-  const head = html.replace(/^﻿/, "").trimStart();
+  const head = html.replace(/^\uFEFF/, "").trimStart();
   if (!head.startsWith("<!--")) {
     fail(rel, 1, "file does not start with the required metadata comment (<!-- Title: ... -->)");
     return null;
@@ -198,6 +198,81 @@ function checkFolder(rel) {
   }
 }
 
+// Check for external resource references and forbid them per the zero-deps rule.
+function checkExternal(rel, html) {
+  if (!html) return;
+  const skip = commentRanges(html);
+
+  // 1) Any <script> with a src attribute is disallowed (scripts must be inline).
+  const scriptRe = /<script\b([^>]*)>/gi;
+  let m;
+  while ((m = scriptRe.exec(html))) {
+    if (inRanges(skip, m.index)) continue;
+    const attrs = m[1];
+    if (/\bsrc\s*=\s*/i.test(attrs)) {
+      fail(rel, lineOf(html, m.index), "external <script> tag with a src attribute is not allowed; inline your script instead");
+    }
+  }
+
+  // 2) <link> tags: stylesheet links or .css files are disallowed.
+  const linkRe = /<link\b([^>]*)>/gi;
+  while ((m = linkRe.exec(html))) {
+    if (inRanges(skip, m.index)) continue;
+    const attrs = m[1];
+    const relAttr = (attrs.match(/\brel=\s*"([^"]*)"/i) || [])[1] || "";
+    const href = (attrs.match(/\bhref=\s*"([^"]*)"/i) || [])[1] || "";
+    if (/stylesheet/i.test(relAttr) || /\.css(\?|$)/i.test(href)) {
+      fail(rel, lineOf(html, m.index), "external stylesheet link is not allowed; inline your styles instead");
+      continue;
+    }
+    // flag remote hrefs on links used as resources (fonts, etc.)
+    if (/^(?:https?:)?\/\//i.test(href) && !/^data:/i.test(href)) {
+      fail(rel, lineOf(html, m.index), `remote URL in <link> href: ${href}`);
+    }
+  }
+
+  // 3) @import inside <style> blocks: disallowed (imports bring external CSS).
+  const styleRe = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+  while ((m = styleRe.exec(html))) {
+    const blockStart = m.index + m[0].indexOf(m[1]);
+    if (inRanges(skip, m.index)) continue;
+    const styleContent = m[1];
+    const importRe = /@import\b[^;]*;/gi;
+    let im;
+    while ((im = importRe.exec(styleContent))) {
+      const idx = blockStart + im.index;
+      if (inRanges(skip, idx)) continue;
+      fail(rel, lineOf(html, idx), "@import in <style> is not allowed; inline or include CSS directly in the file");
+    }
+  }
+
+  // 4) Remote URLs in resource attributes: src, href, data on a set of elements.
+  const resourceTags = [
+    { tag: 'img', attr: 'src' },
+    { tag: 'audio', attr: 'src' },
+    { tag: 'video', attr: 'src' },
+    { tag: 'source', attr: 'src' },
+    { tag: 'track', attr: 'src' },
+    { tag: 'iframe', attr: 'src' },
+    { tag: 'embed', attr: 'src' },
+    { tag: 'object', attr: 'data' }
+  ];
+  for (const { tag, attr } of resourceTags) {
+    const re = new RegExp(`<${tag}\\b([^>]*)>`, 'gi');
+    let mm;
+    while ((mm = re.exec(html))) {
+      if (inRanges(skip, mm.index)) continue;
+      const attrs = mm[1];
+      const val = (attrs.match(new RegExp(`\\b${attr}\\s*=\\s*"([^"]*)"`, 'i')) || [])[1] || "";
+      if (!val) continue;
+      // allow data: URIs; flag absolute remote URLs (http(s): or protocol-relative //)
+      if (/^(?:https?:)?\/\//i.test(val) && !/^data:/i.test(val)) {
+        fail(rel, lineOf(html, mm.index), `${tag} ${attr} points at a remote URL: ${val}`);
+      }
+    }
+  }
+}
+
 function checkGameFile(rel, { registration }) {
   if (!existsSync(abs(rel))) {
     fail(rel, 0, "expected file is missing");
@@ -211,12 +286,15 @@ function checkGameFile(rel, { registration }) {
     fail(rel, lines, `file is ${lines} lines; the limit is ${MAX_LINES}`);
   }
 
-  const back = new RegExp('<a\\b[^>]*href="' + BACK_HREF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + '"', "i");
+  const back = new RegExp('<a\\b[^>]*href="' + BACK_HREF.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&") + '"', "i");
   if (!back.test(html)) {
     fail(rel, 0, `no back link to the launcher: expected <a class="back" href="${BACK_HREF}">`);
   }
 
   checkFolder(rel);
+
+  // New: check for external scripts, styles and resource URLs inside the file.
+  checkExternal(rel, html);
 
   if (registration) {
     const line = registration.listed.get(rel);
@@ -255,6 +333,10 @@ function listGames() {
 /* ---------------------------------------------------------------------- run */
 
 const launcher = readLauncher();
+// Also check the launcher for external references (e.g. CDN scripts, fonts).
+if (existsSync(abs(LAUNCHER))) {
+  try { checkExternal(LAUNCHER, read(LAUNCHER)); } catch (e) { /* ignore parse errors here */ }
+}
 const listed = launcher.ok ? checkLauncherEntries(launcher.entries) : new Map();
 const registration = { listed, entries: launcher.entries };
 
