@@ -55,6 +55,9 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
       outline:2px solid #0db;
       outline-offset:2px;
     }
+    /* Keep [hidden] winning over the block-level rules below, so the
+       empty note can be hidden by script once the list has entries. */
+    [hidden]{ display:none !important; }
     section.empty{
       padding:16px;
       border:1px dashed #444;
@@ -126,9 +129,31 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
         Once your game is merged, add one line to the list above:
         <code>&lt;a class="game" href="games/&lt;name&gt;/index.html"&gt;Title — one-line description&lt;/a&gt;</code>
       </p>
+      <p>
+        Keep the <code>class="game"</code> attribute: the launcher counts those links
+        and hides the "No games are listed yet" note by itself once one exists, so
+        there is nothing else to delete.
+      </p>
     </section>
   </main>
 
   <footer>Browser Arcade — shared launcher</footer>
+
+  <!--
+    Empty-state: the note above is only for an empty launcher. Count the real
+    game links and hide the note as soon as there is at least one, so nobody
+    has to remember to delete it when a game is merged. The selector must match
+    the line documented in CONTRIBUTING.md and in "Add a game to this launcher":
+    <li><a class="game" href="games/<name>/index.html">Title — description</a></li>
+    With JavaScript off the note simply stays visible (today's behaviour).
+  -->
+  <script>
+    (function () {
+      var note = document.getElementById('empty-note');
+      if (!note) return;
+      var games = document.querySelectorAll('#game-list a.game');
+      note.hidden = games.length > 0;
+    })();
+  </script>
 </body>
 </html>

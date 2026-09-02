@@ -17,6 +17,7 @@ Checklist for contributors
 - [ ] Touch support provided or noted (tap for action, an on-screen pause button or two-finger tap)
 - [ ] Visible score or progress indicator included
 - [ ] Pause state clearly visible and toggled by the required control
+- [ ] Launcher entry added: one <li><a class="game" href="games/<name>/index.html">Title — one-line description</a></li> line inside <ul id="game-list"> in the root index.html (see CONTRIBUTING, "Register your game in the launcher")
 - [ ] Tested in desktop and mobile browsers; list the user agent/browser used for verification
 - [ ] Short controls summary and one-line gameplay description included in the PR description
 - [ ] Optional: attach a screenshot or short GIF showing gameplay
