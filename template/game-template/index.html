@@ -14,8 +14,9 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
     html,body{height:100%;margin:0;font-family:sans-serif;background:#111;color:#eee}
     canvas{display:block;background:#222;margin:0 auto}
     #hud{position:fixed;left:10px;top:10px;font-size:18px}
-    #pauseBtn{position:fixed;right:10px;top:10px;padding:8px 12px;background:#444;color:#fff;border-radius:6px;touch-action:none}
-    #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:28px}
+    /* pauseBtn must sit ABOVE pauseOverlay, or the overlay swallows the tap that resumes. */
+    #pauseBtn{position:fixed;right:10px;top:10px;z-index:20;padding:12px 16px;background:#444;color:#fff;border-radius:6px;touch-action:none}
+    #pauseOverlay{position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:28px}
     button{font:inherit}
   </style>
 </head>
@@ -33,10 +34,35 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
     const pauseBtn = document.getElementById('pauseBtn');
     const pauseOverlay = document.getElementById('pauseOverlay');
 
+    const SPEED = 2;          // pixels per frame at full tilt
+    const SCORE_PER_SEC = 10; // time score accrues at this rate
+    const MAX_DT = 0.05;      // clamp: a backgrounded tab must not jump the score
+
     let w = canvas.width, h = canvas.height;
     let x = 50, y = h/2 - 10, vx = 0;
     let score = 0;
+    let scoreAcc = 0;         // fractional score accumulator; whole points move `score`
     let paused = false;
+
+    // Held movement keys, so releasing one direction does not cancel the other.
+    const held = new Set();
+    const LEFT_KEYS = ['ArrowLeft', 'a', 'A'];
+    const RIGHT_KEYS = ['ArrowRight', 'd', 'D'];
+
+    function updateVx(){
+      const left = LEFT_KEYS.some(k => held.has(k));
+      const right = RIGHT_KEYS.some(k => held.has(k));
+      vx = (right ? SPEED : 0) - (left ? SPEED : 0);
+    }
+
+    function showScore(){ scoreEl.textContent = score; }
+
+    // One place for "the player did the action" so keyboard and touch stay in step.
+    function action(){
+      if(paused) return;      // input must do nothing while paused
+      score += 1;
+      showScore();
+    }
 
     function setPaused(v){
       paused = v;
@@ -44,35 +70,58 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
       pauseBtn.textContent = paused ? 'Resume' : 'Pause';
       pauseBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
       pauseOverlay.setAttribute('aria-hidden', (!paused).toString());
+      if(paused){ held.clear(); updateVx(); }  // no sticky movement across a pause
     }
 
     // Controls: keyboard
     window.addEventListener('keydown', (e)=>{
-      if(e.key === 'ArrowRight' || e.key === 'd') vx = 2;
-      if(e.key === 'ArrowLeft' || e.key === 'a') vx = -2;
-      if(e.key === ' ') { score += 1; scoreEl.textContent = score; }
-      if(e.key.toLowerCase() === 'p') setPaused(!paused);
+      const k = e.key;
+      if(LEFT_KEYS.includes(k) || RIGHT_KEYS.includes(k)){
+        e.preventDefault();                    // arrows must not scroll the page
+        if(!paused){ held.add(k); updateVx(); }
+        return;
+      }
+      if(k === ' ' || k === 'Spacebar'){
+        e.preventDefault();                    // Space must not scroll the page
+        action();                              // action() ignores input while paused
+        return;
+      }
+      if(k.toLowerCase() === 'p'){             // P stays live while paused
+        setPaused(!paused);
+      }
     });
     window.addEventListener('keyup', (e)=>{
-      if(e.key === 'ArrowRight' || e.key === 'd') vx = 0;
-      if(e.key === 'ArrowLeft' || e.key === 'a') vx = 0;
+      const k = e.key;
+      if(LEFT_KEYS.includes(k) || RIGHT_KEYS.includes(k)){
+        held.delete(k);
+        updateVx();                            // only the released direction stops
+      }
     });
+    // A tab-out drops keyup events; clear held keys so the player does not drift.
+    window.addEventListener('blur', ()=>{ held.clear(); updateVx(); });
 
     // Touch: tap to action, long-press not needed; on-screen pause button provided.
     canvas.addEventListener('touchstart', (e)=>{
       e.preventDefault();
-      // treat any tap as action
-      score += 1; scoreEl.textContent = score;
+      action();                                // no scoring while paused
     }, {passive:false});
 
-    // Pause button touch/click
-    pauseBtn.addEventListener('click', ()=> setPaused(!paused));
-    pauseBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); setPaused(!paused); }, {passive:false});
+    // Pause button touch/click. Guard so a touch that also emits a synthetic
+    // click does not toggle twice (pause then instant resume).
+    let lastToggle = 0;
+    function togglePause(){
+      const now = performance.now();
+      if(now - lastToggle < 300) return;
+      lastToggle = now;
+      setPaused(!paused);
+    }
+    pauseBtn.addEventListener('click', togglePause);
+    pauseBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); togglePause(); }, {passive:false});
 
     // Simple game loop
     let last = performance.now();
     function loop(t){
-      const dt = (t - last) / 1000; last = t;
+      const dt = Math.min((t - last) / 1000, MAX_DT); last = t;
       if(!paused){
         update(dt);
         render();
@@ -84,9 +133,15 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
       x += vx;
       if(x < 0) x = 0;
       if(x > w-20) x = w-20;
-      // increase score slowly as time passes
-      score += Math.floor(dt * 10);
-      scoreEl.textContent = score;
+      // Increase score as time passes. Accumulate the fraction: dt is about
+      // 0.016, so Math.floor(dt * 10) would floor to 0 on every single frame.
+      scoreAcc += dt * SCORE_PER_SEC;
+      if(scoreAcc >= 1){
+        const whole = Math.floor(scoreAcc);
+        scoreAcc -= whole;
+        score += whole;
+      }
+      showScore();
     }
 
     function render(){
