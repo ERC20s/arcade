@@ -130,24 +130,24 @@ function checkLauncherEntries(entries) {
       continue;
     }
     if (!entry.hasGameClass) {
-      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is missing class="game"`);
+      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is missing class="game"");
     }
     if (/^(?:[a-z]+:)?\/\//i.test(entry.href) || entry.href.startsWith("#")) {
-      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is not a path to a game in this repository`);
+      fail(LAUNCHER, entry.line, `launcher link "${entry.href}" is not a path to a game in this repository");
       continue;
     }
     const rel = entry.href.replace(/^\.\//, "").split(/[?#]/)[0];
     if (seen.has(rel)) {
-      fail(LAUNCHER, entry.line, `launcher lists "${rel}" twice (first at line ${seen.get(rel)})`);
+      fail(LAUNCHER, entry.line, `launcher lists "${rel}" twice (first at line ${seen.get(rel)})");
     } else {
       seen.set(rel, entry.line);
     }
     if (!existsSync(abs(rel))) {
-      fail(LAUNCHER, entry.line, `dead launcher link: "${rel}" does not exist on disk`);
+      fail(LAUNCHER, entry.line, `dead launcher link: "${rel}" does not exist on disk");
       continue;
     }
     if (!/^games\/[^/]+\/index\.html$/.test(rel)) {
-      fail(LAUNCHER, entry.line, `launcher link "${rel}" should point at games/<name>/index.html`);
+      fail(LAUNCHER, entry.line, `launcher link "${rel}" should point at games/<name>/index.html");
     }
   }
   return seen;
@@ -158,7 +158,7 @@ function checkLauncherEntries(entries) {
 // The metadata block: the file must OPEN with the HTML comment carrying the
 // three exact labels CONTRIBUTING.md requires.
 function checkMetadata(rel, html) {
-  const head = html.replace(/^﻿/, "").trimStart();
+  const head = html.replace(/^\uFEFF/, "").trimStart();
   if (!head.startsWith("<!--")) {
     fail(rel, 1, "file does not start with the required metadata comment (<!-- Title: ... -->)");
     return null;
@@ -211,8 +211,27 @@ function checkGameFile(rel, { registration }) {
     fail(rel, lines, `file is ${lines} lines; the limit is ${MAX_LINES}`);
   }
 
-  const back = new RegExp('<a\\b[^>]*href="' + BACK_HREF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + '"', "i");
-  if (!back.test(html)) {
+  // Enforce a back link pointing at BACK_HREF that also carries the token class "back".
+  // We ignore anchors that are inside HTML comments.
+  const skip = commentRanges(html);
+  const anchorRe = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  let m;
+  let foundHref = false;
+  while ((m = anchorRe.exec(html))) {
+    if (inRanges(skip, m.index)) continue;
+    const attrs = m[1];
+    const hrefMatch = attrs.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
+    const href = hrefMatch ? (hrefMatch[1] || hrefMatch[2]) : "";
+    if (href === BACK_HREF) {
+      foundHref = true;
+      const hasBackClass = /\bclass\s*=\s*(?:"[^"]*\bback\b[^"]*"|'[^']*\bback\b[^']*')/i.test(attrs);
+      if (!hasBackClass) {
+        fail(rel, lineOf(html, m.index), `missing class="back" on back link`);
+      }
+      break; // whether or not it had the class, we found the href so stop looking further
+    }
+  }
+  if (!foundHref) {
     fail(rel, 0, `no back link to the launcher: expected <a class="back" href="${BACK_HREF}">`);
   }
 
