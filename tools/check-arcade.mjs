@@ -224,12 +224,12 @@ function checkGameFile(rel, { registration }) {
     const idx = m.index;
     if (inRanges(skip, idx)) continue;
     const attrs = m[1];
-    const hrefMatch = attrs.match(/\bhref\s*=\s*(["'])(.*?)\1/i);
+    const hrefMatch = attrs.match(/\bhref\s*=\s*(['"])(.*?)\1/i);
     if (!hrefMatch) continue;
     const hrefVal = hrefMatch[2];
     if (hrefVal !== BACK_HREF) continue;
     found = true;
-    const classMatch = attrs.match(/\bclass\s*=\s*(["'])(.*?)\1/i);
+    const classMatch = attrs.match(/\bclass\s*=\s*(['"])(.*?)\1/i);
     let hasBack = false;
     if (classMatch && classMatch[2]) {
       const tokens = classMatch[2].split(/\s+/).filter(Boolean);
@@ -242,6 +242,35 @@ function checkGameFile(rel, { registration }) {
   }
   if (!found) {
     fail(rel, 0, `no back link to the launcher: expected <a class="back" href="${BACK_HREF}">`);
+  }
+
+  // New checks: require a visible score indicator and a pause affordance.
+  // Use the commentRanges computed above to ignore commented-out markup.
+  function foundOutsideComments(re) {
+    let mm;
+    // Ensure global flag for repeated exec calls
+    const g = new RegExp(re.source, re.flags.includes("g") ? re.flags : (re.flags + "g").replace(/g+/g, "g"));
+    while ((mm = g.exec(html))) {
+      if (!inRanges(skip, mm.index)) return true;
+    }
+    return false;
+  }
+
+  // Visible score: either an element with id="score" or the literal text "Score:" outside comments
+  const idScoreRe = /\bid\s*=\s*(?:(["'])score\1|score\b)/i;
+  const textScoreRe = /\bScore:/i;
+  const hasScore = foundOutsideComments(idScoreRe) || foundOutsideComments(textScoreRe);
+  if (!hasScore) {
+    fail(rel, 0, 'missing visible score: add id="score" or include the text "Score:" in the DOM');
+  }
+
+  // Pause affordance: id="pauseBtn" OR id="pauseOverlay" OR the literal text "Paused"
+  const idPauseBtnRe = /\bid\s*=\s*(?:(["'])pauseBtn\1|pauseBtn\b)/i;
+  const idPauseOverlayRe = /\bid\s*=\s*(?:(["'])pauseOverlay\1|pauseOverlay\b)/i;
+  const textPausedRe = /\bPaused\b/i;
+  const hasPause = foundOutsideComments(idPauseBtnRe) || foundOutsideComments(idPauseOverlayRe) || foundOutsideComments(textPausedRe);
+  if (!hasPause) {
+    fail(rel, 0, 'missing pause affordance: add an on-screen pause button (id="pauseBtn") or a pause overlay (id="pauseOverlay")');
   }
 
   checkFolder(rel);
