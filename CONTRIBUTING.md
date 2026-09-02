@@ -3,7 +3,7 @@ Follow these minimal rules so games work with the shared launcher and stay easy 
 
 Folder layout
 - Put each game in its own folder under games/, with the entry file at games/<name>/index.html.
-- No build step or external dependencies: each game must be a single HTML file (may include inline CSS and JS).
+- No build step or external dependencies: the game must be a single HTML file with inline CSS and JS. Small static assets (an image, a sound) may sit in the same folder, but there are no separate .js/.css source files, no package.json, no bundler and no CDN runtime.
 
 Required metadata
 - Each index.html must start with an HTML comment block containing these fields (exact labels):
@@ -15,13 +15,22 @@ Required metadata
 - The launcher and reviewers will read these fields to show the game list and basic info.
 
 Size constraint
-- Each game's index.html must be <= 400 lines (lines are used to keep games small and reviewable).
+- The 400-line limit applies to games/<name>/index.html: that file must be <= 400 lines. Static assets in the folder are not counted.
 - Keep code concise; utility comments are fine.
 
 Keyboard and touch
 - Games must support keyboard controls and basic touch input.
 - Minimum required controls: movement (arrow keys or WASD), one action button (e.g. Space), and a pause toggle (P).
 - Provide equivalent touch affordances: tap for action, an on-screen pause button or two-finger tap to pause.
+- Every game must carry a visible link back to the launcher. Use a plain anchor to the root launcher:
+  <a class="back" href="../../index.html">&larr; Arcade</a>
+- The back link must be reachable both ways: focusable with Tab and followed with Enter, with a visible focus style, and tappable with a target of at least 44x44 CSS pixels. Do not swallow Enter or Tab in a global keydown handler, and keep the link clear of the pause overlay so it still works while paused.
+
+Register the game in the launcher
+- A game is not done until it is listed. In the same pull request, add one line inside <ul id="game-list"> in the root index.html:
+  <li><a class="game" href="games/<name>/index.html">Title &mdash; one-line description</a></li>
+- Use the Title and Description from the game's own metadata header so the launcher and the file agree.
+- The launcher's empty-state note (section id="empty-note") is meant to disappear once the list has entries. If it is still visible after you add your line, say so in the pull request rather than deleting the launcher's other markup.
 
 Accessibility and UX
 - Provide a visible score or progress indicator (simple numeric counter is acceptable).
@@ -30,11 +39,16 @@ Accessibility and UX
 
 Template
 - A minimal template is included at template/game-template/index.html. Copy it into games/<name>/index.html and edit the metadata block and game code.
+- The template is a starting point, not proof of compliance: whatever it contains, your game still needs the back-to-launcher link and the launcher list entry described above before it can be merged.
 
 How to verify a submission
-- Open games/<name>/index.html in a browser.
+- Serve the repository root (see README.md) and open the launcher, not the game file directly, so relative links behave as they will after merge.
 - Check the metadata header is present and correct.
+- Check the launcher lists the game: the new <li> is inside <ul id="game-list">, the link opens games/<name>/index.html, and the title and description match the metadata header.
 - Verify keyboard input (arrows, Space, P), touch taps trigger the action, and the pause overlay appears and hides.
+- Verify the back link both ways: Tab to it (focus must be visible), press Enter and land on the launcher; then tap it on a touch screen or a narrow window. Repeat once while the game is paused.
+- Check index.html is <= 400 lines and that the folder holds no extra source files.
+- A submission that fails the launcher entry or the back link is not merged: the game would be unreachable from the arcade, or a dead end once opened.
 
 Questions
 - If a game needs relaxed constraints for a specific reason (larger file, assets), open an issue describing why and propose a path forward.
