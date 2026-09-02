@@ -158,7 +158,7 @@ function checkLauncherEntries(entries) {
 // The metadata block: the file must OPEN with the HTML comment carrying the
 // three exact labels CONTRIBUTING.md requires.
 function checkMetadata(rel, html) {
-  const head = html.replace(/^﻿/, "").trimStart();
+  const head = html.replace(/^\uFEFF/, "").trimStart();
   if (!head.startsWith("<!--")) {
     fail(rel, 1, "file does not start with the required metadata comment (<!-- Title: ... -->)");
     return null;
@@ -211,8 +211,36 @@ function checkGameFile(rel, { registration }) {
     fail(rel, lines, `file is ${lines} lines; the limit is ${MAX_LINES}`);
   }
 
-  const back = new RegExp('<a\\b[^>]*href="' + BACK_HREF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + '"', "i");
-  if (!back.test(html)) {
+  // Look for live <a ...> anchors whose href points exactly at BACK_HREF,
+  // ignoring commented ranges, accepting single or double quotes and any
+  // attribute order. If such an anchor exists but its class attribute does
+  // not include the token 'back' (case-insensitive, as a space-separated
+  // token), report a single-line diagnostic pointing at the anchor's line.
+  const skip = commentRanges(html);
+  const anchorRe = /<a\b([^>]*)>/gi;
+  let m;
+  let found = false;
+  while ((m = anchorRe.exec(html))) {
+    const idx = m.index;
+    if (inRanges(skip, idx)) continue;
+    const attrs = m[1];
+    const hrefMatch = attrs.match(/\bhref\s*=\s*(["'])(.*?)\1/i);
+    if (!hrefMatch) continue;
+    const hrefVal = hrefMatch[2];
+    if (hrefVal !== BACK_HREF) continue;
+    found = true;
+    const classMatch = attrs.match(/\bclass\s*=\s*(["'])(.*?)\1/i);
+    let hasBack = false;
+    if (classMatch && classMatch[2]) {
+      const tokens = classMatch[2].split(/\s+/).filter(Boolean);
+      hasBack = tokens.some(t => t.toLowerCase() === "back");
+    }
+    if (!hasBack) {
+      const line = lineOf(html, idx);
+      fail(rel, line, 'missing class="back" on back link');
+    }
+  }
+  if (!found) {
     fail(rel, 0, `no back link to the launcher: expected <a class="back" href="${BACK_HREF}">`);
   }
 
@@ -273,4 +301,4 @@ if (problems.length) {
   process.exit(1);
 }
 
-console.log(`arcade check passed — ${checked.join(", ")}${games.length ? "" : "; no games merged yet"}.`);
+console.log(`arcade check passed — ${checked.join(", ")} ${games.length ? "" : "; no games merged yet"}.`);
