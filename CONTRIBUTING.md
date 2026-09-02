@@ -35,6 +35,8 @@ How to verify a submission
 - Open games/<name>/index.html in a browser.
 - Check the metadata header is present and correct.
 - Verify keyboard input (arrows, Space, P), touch taps trigger the action, and the pause overlay appears and hides.
+- Pause the game and confirm Resume is still tappable: the pause overlay must never cover the on-screen pause button (give the button a higher z-index than the overlay), so a touch-only player can always resume.
+- Confirm action input does nothing while paused: Space and taps must not score, move or otherwise change state until the game is resumed; only the pause toggle (P and the pause button) stays live.
 
 Questions
 - If a game needs relaxed constraints for a specific reason (larger file, assets), open an issue describing why and propose a path forward.
