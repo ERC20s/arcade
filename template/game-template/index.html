@@ -33,46 +33,77 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
     const pauseBtn = document.getElementById('pauseBtn');
     const pauseOverlay = document.getElementById('pauseOverlay');
 
+    const SPEED = 120;        // pixels per second — movement is time based, not per frame
+    const TIME_POINTS = 10;   // score points earned per second of play
+    const MAX_DT = 0.1;       // clamp long frames (background tab, slow device)
+
     let w = canvas.width, h = canvas.height;
-    let x = 50, y = h/2 - 10, vx = 0;
-    let score = 0;
+    let x = 50, y = h/2 - 10;
+    let score = 0;            // float accumulator; the HUD shows Math.floor(score)
+    let shown = -1;           // last integer written to the HUD
     let paused = false;
+    // Held direction keys, so releasing one does not cancel the other.
+    const held = { left:false, right:false };
+
+    function velocity(){
+      return (held.right ? SPEED : 0) - (held.left ? SPEED : 0);
+    }
+
+    function showScore(){
+      const n = Math.floor(score);
+      if(n !== shown){ shown = n; scoreEl.textContent = n; }
+    }
+
+    function addScore(n){ score += n; showScore(); }
 
     function setPaused(v){
       paused = v;
+      if(paused){ held.left = held.right = false; }
       pauseOverlay.style.display = paused ? 'flex' : 'none';
       pauseBtn.textContent = paused ? 'Resume' : 'Pause';
       pauseBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
       pauseOverlay.setAttribute('aria-hidden', (!paused).toString());
+      if(!paused) last = performance.now(); // do not bank paused time as one huge frame
     }
+
+    // Keys this game owns — swallowed so arrows/Space never scroll the page.
+    const HANDLED = ['ArrowRight','ArrowLeft','a','A','d','D',' ','p','P'];
 
     // Controls: keyboard
     window.addEventListener('keydown', (e)=>{
-      if(e.key === 'ArrowRight' || e.key === 'd') vx = 2;
-      if(e.key === 'ArrowLeft' || e.key === 'a') vx = -2;
-      if(e.key === ' ') { score += 1; scoreEl.textContent = score; }
-      if(e.key.toLowerCase() === 'p') setPaused(!paused);
+      if(e.ctrlKey || e.metaKey || e.altKey) return;
+      if(HANDLED.indexOf(e.key) !== -1) e.preventDefault();
+      if(e.key === 'p' || e.key === 'P'){ if(!e.repeat) setPaused(!paused); return; }
+      if(paused) return;                       // no input reaches the game while paused
+      if(e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') held.right = true;
+      if(e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') held.left  = true;
+      if(e.key === ' ' && !e.repeat) addScore(1);
     });
     window.addEventListener('keyup', (e)=>{
-      if(e.key === 'ArrowRight' || e.key === 'd') vx = 0;
-      if(e.key === 'ArrowLeft' || e.key === 'a') vx = 0;
+      if(e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') held.right = false;
+      if(e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') held.left  = false;
     });
+    // A tab switch or alert can eat the keyup: drop everything held.
+    window.addEventListener('blur', ()=>{ held.left = held.right = false; });
 
     // Touch: tap to action, long-press not needed; on-screen pause button provided.
     canvas.addEventListener('touchstart', (e)=>{
       e.preventDefault();
+      if(paused) return;
       // treat any tap as action
-      score += 1; scoreEl.textContent = score;
+      addScore(1);
     }, {passive:false});
 
-    // Pause button touch/click
-    pauseBtn.addEventListener('click', ()=> setPaused(!paused));
-    pauseBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); setPaused(!paused); }, {passive:false});
+    // Pause button touch/click. Blur it so a later Space does not re-toggle pause.
+    pauseBtn.addEventListener('click', ()=>{ setPaused(!paused); pauseBtn.blur(); });
+    pauseBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); setPaused(!paused); pauseBtn.blur(); }, {passive:false});
 
     // Simple game loop
     let last = performance.now();
     function loop(t){
-      const dt = (t - last) / 1000; last = t;
+      let dt = (t - last) / 1000; last = t;
+      if(dt > MAX_DT) dt = MAX_DT;
+      if(dt < 0) dt = 0;
       if(!paused){
         update(dt);
         render();
@@ -81,12 +112,11 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
     }
 
     function update(dt){
-      x += vx;
+      x += velocity() * dt;
       if(x < 0) x = 0;
       if(x > w-20) x = w-20;
       // increase score slowly as time passes
-      score += Math.floor(dt * 10);
-      scoreEl.textContent = score;
+      addScore(dt * TIME_POINTS);
     }
 
     function render(){
@@ -110,6 +140,9 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
     fit();
 
     // start
+    showScore();
+    render();
+    last = performance.now();
     requestAnimationFrame(loop);
   </script>
 </body>
