@@ -15,8 +15,14 @@
  *     - the file opens with the metadata comment carrying Title:, Description:
  *       and Controls:
  *     - the file is <= 400 lines
- *     - it holds the back link <a ... href="../../index.html">
+ *     - it holds the back link <a class="back" href="../../index.html">
+ *     - it shows a score (id="score" or the text "Score:") and a pause
+ *       affordance (id="pauseBtn", id="pauseOverlay" or the text "Paused")
  *     - the folder holds no .js, .css or package.json file
+ *
+ * All of the text searches skip HTML comments and the contents of <script> and
+ * <style> blocks, so a string in the game's JavaScript or a rule in its CSS
+ * never stands in for markup the player can actually see.
  *   Every game, additionally
  *     - it is listed in the launcher and the link text starts with its Title
  *
@@ -71,6 +77,35 @@ function commentRanges(html) {
   return ranges;
 }
 
+// Ranges of <script ...> ... </script> and <style ...> ... </style>. What is
+// inside them is code, not something the player reads on screen: a JavaScript
+// string "Score: " or a CSS rule #pauseBtn{...} must not stand in for the real
+// on-screen markup, and an <a href="../../index.html"> built inside a string is
+// not a live back link either.
+function scriptStyleRanges(html) {
+  const ranges = [];
+  const re = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+  let m;
+  while ((m = re.exec(html))) ranges.push([m.index, m.index + m[0].length]);
+  return ranges;
+}
+
+// Everything the checker's text searches must skip: comments plus script and
+// style blocks, sorted and merged so overlaps (a <script> inside a comment, a
+// comment inside a <style>) count once. Deliberately a regex heuristic, not a
+// full HTML parse — arcade games are single self-contained files.
+function excludedRanges(html) {
+  const all = commentRanges(html).concat(scriptStyleRanges(html));
+  all.sort((a, b) => a[0] - b[0]);
+  const merged = [];
+  for (const range of all) {
+    const last = merged[merged.length - 1];
+    if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1]);
+    else merged.push([range[0], range[1]]);
+  }
+  return merged;
+}
+
 function inRanges(ranges, index) {
   return ranges.some(([start, end]) => index >= start && index < end);
 }
@@ -104,7 +139,7 @@ function readLauncher() {
   }
   const blockStart = html.indexOf(list[0]) + list[0].indexOf(list[1]);
   const block = list[1];
-  const skip = commentRanges(block);
+  const skip = excludedRanges(block);
   const entries = [];
   const anchor = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
   let m;
@@ -212,11 +247,11 @@ function checkGameFile(rel, { registration }) {
   }
 
   // Look for live <a ...> anchors whose href points exactly at BACK_HREF,
-  // ignoring commented ranges, accepting single or double quotes and any
+  // ignoring comment, script and style ranges, accepting single or double quotes and any
   // attribute order. If such an anchor exists but its class attribute does
   // not include the token 'back' (case-insensitive, as a space-separated
   // token), report a single-line diagnostic pointing at the anchor's line.
-  const skip = commentRanges(html);
+  const skip = excludedRanges(html);
   const anchorRe = /<a\b([^>]*)>/gi;
   let m;
   let found = false;
@@ -244,9 +279,10 @@ function checkGameFile(rel, { registration }) {
     fail(rel, 0, `no back link to the launcher: expected <a class="back" href="${BACK_HREF}">`);
   }
 
-  // New checks: require a visible score indicator and a pause affordance.
-  // Use the commentRanges computed above to ignore commented-out markup.
-  function foundOutsideComments(re) {
+  // Require a visible score indicator and a pause affordance. Both searches use
+  // the excluded ranges computed above, so commented-out markup, JavaScript
+  // strings and CSS rules never count: only what is in the live DOM does.
+  function foundOutsideExcluded(re) {
     let mm;
     // Ensure global flag for repeated exec calls
     const g = new RegExp(re.source, re.flags.includes("g") ? re.flags : (re.flags + "g").replace(/g+/g, "g"));
@@ -256,21 +292,22 @@ function checkGameFile(rel, { registration }) {
     return false;
   }
 
-  // Visible score: either an element with id="score" or the literal text "Score:" outside comments
+  // Visible score: either an element with id="score" or the literal text
+  // "Score:" in the live DOM (outside comments, <script> and <style>).
   const idScoreRe = /\bid\s*=\s*(?:(["'])score\1|score\b)/i;
   const textScoreRe = /\bScore:/i;
-  const hasScore = foundOutsideComments(idScoreRe) || foundOutsideComments(textScoreRe);
+  const hasScore = foundOutsideExcluded(idScoreRe) || foundOutsideExcluded(textScoreRe);
   if (!hasScore) {
-    fail(rel, 0, 'missing visible score: add id="score" or include the text "Score:" in the DOM');
+    fail(rel, 0, 'missing visible score: add id="score" or the text "Score:" to the markup (a match inside <script>, <style> or a comment does not count)');
   }
 
   // Pause affordance: id="pauseBtn" OR id="pauseOverlay" OR the literal text "Paused"
   const idPauseBtnRe = /\bid\s*=\s*(?:(["'])pauseBtn\1|pauseBtn\b)/i;
   const idPauseOverlayRe = /\bid\s*=\s*(?:(["'])pauseOverlay\1|pauseOverlay\b)/i;
   const textPausedRe = /\bPaused\b/i;
-  const hasPause = foundOutsideComments(idPauseBtnRe) || foundOutsideComments(idPauseOverlayRe) || foundOutsideComments(textPausedRe);
+  const hasPause = foundOutsideExcluded(idPauseBtnRe) || foundOutsideExcluded(idPauseOverlayRe) || foundOutsideExcluded(textPausedRe);
   if (!hasPause) {
-    fail(rel, 0, 'missing pause affordance: add an on-screen pause button (id="pauseBtn") or a pause overlay (id="pauseOverlay")');
+    fail(rel, 0, 'missing pause affordance: add an on-screen pause button (id="pauseBtn") or a pause overlay (id="pauseOverlay") to the markup (a match inside <script>, <style> or a comment does not count)');
   }
 
   checkFolder(rel);
