@@ -46,6 +46,7 @@ Template
 
 How to verify a submission
 - Run npm run check from the repository root (Node 18 or newer; no install, no dependencies). It re-checks the launcher links, the metadata header, the back link, the 400-line limit and the no-extra-source-files rule for every game and for the template, prints one line per problem and exits non-zero. It is a first pass, not a replacement for the manual checks below.
+- If your change touches a rule in tools/check-arcade.mjs, also run npm test. That is the checker's own self-test: it runs the checker with --root against the small fixture arcades in tools/fixtures/ (a clean one and one per known-bad case) and against this repository, and asserts the exit code and the problem line. A rule that is too broad fails the clean fixture; a rule that is too narrow fails its known-bad fixture. Add a fixture folder and a row in the CASES table there when you add a rule.
 - Serve the repository root (see README.md) and open the launcher, not the game file directly, so relative links behave as they will after merge.
 - Check the metadata header is present and correct.
 - Check the launcher lists the game: the new <li> is inside <ul id="game-list">, the link opens games/<name>/index.html, and the title and description match the metadata header.

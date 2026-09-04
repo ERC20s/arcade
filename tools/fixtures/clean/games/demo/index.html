@@ -1,0 +1,28 @@
+<!--
+Title: Demo
+Description: Fixture game for the checker self-test; not a playable game.
+Controls: Arrow keys or tap to move, P or the Pause button to pause.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; }
+    #pauseOverlay[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../../index.html">&larr; Arcade</a>
+  <p>Score: <span id="score">0</span></p>
+  <button id="pauseBtn" type="button">Pause</button>
+  <div id="pauseOverlay" hidden>Paused</div>
+  <script>
+    document.getElementById("pauseBtn").addEventListener("click", function () {
+      document.getElementById("pauseOverlay").hidden = false;
+    });
+  </script>
+</body>
+</html>

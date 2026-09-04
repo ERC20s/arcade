@@ -5,6 +5,14 @@
  * Plain Node (>= 18), zero dependencies, no build step. Run it from the
  * repository root with `npm run check` (or `node tools/check-arcade.mjs`).
  *
+ * Usage
+ *   node tools/check-arcade.mjs [--root <dir>]
+ *
+ * By default the repository root is the folder above tools/. The optional
+ * --root <dir> (or --root=<dir>) points the same rules at another repository
+ * root; `npm test` uses it to run the checker against the fixture roots in
+ * tools/fixtures/. Nothing about the rules below changes with it.
+ *
  * What it checks
  *   Launcher (index.html)
  *     - the <ul id="game-list"> block exists
@@ -27,14 +35,46 @@
  *     - it is listed in the launcher and the link text starts with its Title
  *
  * Every problem prints one line as `path:line: message`; a clean run prints a
- * short summary. The exit code is 0 when clean and 1 when anything failed.
+ * short summary. The exit code is 0 when clean, 1 when anything failed and 2
+ * when the command line itself is wrong (a --root that names no directory).
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// The repository root the rules are applied to: the folder above tools/ unless
+// --root <dir> / --root=<dir> says otherwise. A bad or missing value is a usage
+// error (exit 2), which is never confused with "the arcade has problems" (1).
+function rootFromArgv(argv) {
+  const fallback = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  let value = null;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--root") {
+      value = argv[i + 1];
+      if (!value || value.startsWith("--")) value = "";
+      break;
+    }
+    if (arg.startsWith("--root=")) {
+      value = arg.slice("--root=".length);
+      break;
+    }
+  }
+  if (value === null) return fallback;
+  if (!value) {
+    console.error("usage: node tools/check-arcade.mjs [--root <dir>]");
+    process.exit(2);
+  }
+  const resolved = path.resolve(value);
+  if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+    console.error(`--root: not a directory: ${resolved}`);
+    process.exit(2);
+  }
+  return resolved;
+}
+
+const ROOT = rootFromArgv(process.argv.slice(2));
 const MAX_LINES = 400;
 const LAUNCHER = "index.html";
 const TEMPLATE = "template/game-template/index.html";
