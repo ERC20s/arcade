@@ -25,6 +25,7 @@ Keyboard and touch
 - Every game must carry a visible link back to the launcher. Use a plain anchor to the root launcher:
   <a class="back" href="../../index.html">&larr; Arcade</a>
 - The back link must be reachable both ways: focusable with Tab and followed with Enter, with a visible focus style, and tappable with a target of at least 44x44 CSS pixels. Do not swallow Enter or Tab in a global keydown handler, and keep the link clear of the pause overlay so it still works while paused.
+- Stand down only for the keys a focused control actually consumes (Tab always, Enter and Space while a link, button or form control has focus). Never return early from the whole keydown handler just because something interactive is focused: clicking the on-screen Pause button leaves focus on it, and a blanket guard would kill arrows, WASD and P until the player clicked elsewhere.
 
 Register the game in the launcher
 - A game is not done until it is listed. In the same pull request, add one line inside <ul id="game-list"> in the root index.html:
@@ -40,7 +41,7 @@ Accessibility and UX
 Template
 - A minimal template is included at template/game-template/index.html. Copy it into games/<name>/index.html and edit the metadata block and game code.
 - The template now ships with the back-to-launcher link already in place (<a class="back" href="../../index.html">), sized as a 44x44 tap target, with a visible focus outline and above the pause overlay. Keep it when you copy the template, and keep its href pointing at ../../index.html, which resolves to the root launcher from games/<name>/index.html.
-- The template's global keydown handler stands down while a link or button has focus, so Tab, Enter and Space keep working on the back link and the pause button. If you rewrite the input handling, preserve that guard.
+- The template's global keydown handler stands down for Tab, and for Enter and Space while a link or button has focus, so those keys keep working on the back link and the pause button while movement and pause keys stay with the game. If you rewrite the input handling, preserve that guard as written — do not widen it back to every key.
 - Everything else is still on you: the template is a starting point, not proof of compliance, and your game still needs the launcher list entry described above before it can be merged.
 
 How to verify a submission
@@ -49,6 +50,7 @@ How to verify a submission
 - Check the metadata header is present and correct.
 - Check the launcher lists the game: the new <li> is inside <ul id="game-list">, the link opens games/<name>/index.html, and the title and description match the metadata header.
 - Verify keyboard input (arrows, Space, P), touch taps trigger the action, and the pause overlay appears and hides.
+- Click the on-screen pause button with the mouse, click it again to resume, then press the movement keys and P without clicking anywhere else: the keyboard must still work.
 - Verify the back link both ways: Tab to it (focus must be visible), press Enter and land on the launcher; then tap it on a touch screen or a narrow window. Repeat once while the game is paused.
 - Check index.html is <= 400 lines and that the folder holds no extra source files.
 - A submission that fails the launcher entry or the back link is not merged: the game would be unreachable from the arcade, or a dead end once opened.

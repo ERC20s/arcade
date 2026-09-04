@@ -60,12 +60,14 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
       pauseOverlay.setAttribute('aria-hidden', (!paused).toString());
     }
 
-    // When a link or a button has focus, the browser owns the keyboard: Tab moves on,
-    // Enter follows the back link, Space presses the button. Swallowing those here
-    // would break the back-to-launcher link and double-fire pause, so the game keys
-    // stand down while an interactive element is focused.
+    // The browser only owns the keys a focused control actually consumes: Tab always
+    // moves focus, and Enter/Space follow a link or press a button while one has focus.
+    // Only those stand down here, so the back link still works and pause never
+    // double-fires. Every other key stays with the game: clicking the on-screen Pause
+    // button leaves focus on it, and the movement keys must keep working anyway.
     function keysBelongToBrowser(e){
       if(e.key === 'Tab') return true;
+      if(e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return false;
       const t = e.target;
       if(!t || !t.closest) return false;
       return !!t.closest('a[href], button, input, select, textarea, [contenteditable="true"]');
