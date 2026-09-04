@@ -94,19 +94,12 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
   <main>
     <!--
       Game list: add one <li><a class="game" href="games/<name>/index.html">Title — one-line description</a></li>
-      per entry as games are merged. No games are merged yet, so the list starts empty
-      with a placeholder note below.
+      per entry as games are merged. The link text must start with the game's
+      Title: from its metadata comment — tools/check-arcade.mjs enforces that.
     -->
     <ul id="game-list">
-      <!-- Example entry (not a real game yet):
-      <li><a class="game" href="games/hello/index.html">Hello — starter game</a></li>
-      -->
+      <li><a class="game" href="games/snake/index.html">Snake — eat, grow, do not bite yourself</a></li>
     </ul>
-
-    <section class="empty" id="empty-note">
-      No games are listed yet. Once a game is merged into <code>games/&lt;name&gt;/index.html</code>,
-      add a link for it above.
-    </section>
 
     <section class="how-to">
       <h2>Add a game to this launcher</h2>

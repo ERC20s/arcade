@@ -1,0 +1,275 @@
+<!--
+Title: Snake
+Description: Classic grid snake: eat the fruit, grow longer, do not hit yourself or the walls.
+Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Space (or tap the board) to restart after a game over; swipe the board to turn on touch; Tab to the "Arcade" link and Enter to go back to the launcher (tap it on touch).
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Snake — Browser Arcade</title>
+  <style>
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#111;color:#eee}
+    canvas{display:block;background:#1a1a1a;margin:0 auto;border:1px solid #333;box-sizing:content-box;touch-action:none}
+    #hud{position:fixed;left:10px;top:10px;font-size:18px}
+    #best{color:#aaa;font-size:14px}
+    #pauseBtn{position:fixed;right:10px;top:10px;min-width:44px;min-height:44px;padding:8px 12px;background:#444;color:#fff;border:1px solid #555;border-radius:6px;touch-action:none;z-index:10}
+    /* The overlays sit under the controls and never eat a tap: the back link and
+       the pause button must still work while the game is paused or over. */
+    #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:28px;z-index:5;pointer-events:none}
+    #overOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:rgba(0,0,0,0.7);color:#fff;font-size:26px;text-align:center;z-index:5;pointer-events:none}
+    #overOverlay small{font-size:15px;color:#bbb}
+    /* Back to the launcher: required by CONTRIBUTING.md. Bottom-left keeps it clear
+       of the HUD (top-left) and the pause button (top-right) down to ~320px width.
+       44x44 CSS pixels minimum so it is a real tap target. */
+    a.back{position:fixed;left:10px;bottom:10px;z-index:10;display:inline-flex;align-items:center;
+           min-width:44px;min-height:44px;box-sizing:border-box;padding:10px 14px;
+           background:#333;color:#eee;border:1px solid #555;border-radius:8px;
+           font-size:16px;line-height:1;text-decoration:none}
+    a.back:hover{background:#3d3d3d}
+    a.back:focus{outline:3px solid #0db;outline-offset:2px}
+    a.back:focus-visible{outline:3px solid #0db;outline-offset:2px}
+    button{font:inherit}
+    main{display:flex;align-items:center;justify-content:center;height:100%}
+  </style>
+</head>
+<body>
+  <div id="hud">Score: <span id="score">0</span> <span id="best">best 0</span></div>
+  <button id="pauseBtn" aria-pressed="false">Pause</button>
+  <div id="pauseOverlay" role="status" aria-hidden="true">Paused</div>
+  <div id="overOverlay" role="status" aria-hidden="true">
+    <div>Game over</div>
+    <small>Press Enter or tap the board to play again</small>
+  </div>
+  <main><canvas id="c" width="600" height="400"></canvas></main>
+  <!-- Required by CONTRIBUTING.md: keep this link when you copy the template. -->
+  <a class="back" href="../../index.html">&larr; Arcade</a>
+
+  <script>
+    // Snake: one self-contained file, no dependencies, no build step.
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    const overOverlay = document.getElementById('overOverlay');
+
+    const CELL = 20;
+    const COLS = canvas.width / CELL;   // 30
+    const ROWS = canvas.height / CELL;  // 20
+    const START_STEP = 0.14;            // seconds per move at score 0
+    const MIN_STEP = 0.06;              // fastest the snake ever gets
+
+    let snake, dir, nextDir, fruit, score, best = 0, paused, over, acc, step;
+
+    function reset(){
+      const cx = Math.floor(COLS / 2), cy = Math.floor(ROWS / 2);
+      snake = [{x:cx, y:cy}, {x:cx-1, y:cy}, {x:cx-2, y:cy}];
+      dir = {x:1, y:0};
+      nextDir = dir;
+      score = 0;
+      acc = 0;
+      step = START_STEP;
+      over = false;
+      placeFruit();
+      setPaused(false);
+      setOver(false);
+      updateScore();
+      render();
+    }
+
+    function updateScore(){
+      scoreEl.textContent = score;
+      if(score > best) best = score;
+      bestEl.textContent = 'best ' + best;
+    }
+
+    function placeFruit(){
+      const free = [];
+      for(let y = 0; y < ROWS; y++){
+        for(let x = 0; x < COLS; x++){
+          if(!snake.some(s => s.x === x && s.y === y)) free.push({x, y});
+        }
+      }
+      // Board full: the player has won; keep the last fruit off-board.
+      fruit = free.length ? free[Math.floor(Math.random() * free.length)] : null;
+    }
+
+    function setPaused(v){
+      paused = v;
+      pauseOverlay.style.display = paused ? 'flex' : 'none';
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+      pauseBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+      pauseOverlay.setAttribute('aria-hidden', (!paused).toString());
+    }
+
+    function setOver(v){
+      over = v;
+      overOverlay.style.display = over ? 'flex' : 'none';
+      overOverlay.setAttribute('aria-hidden', (!over).toString());
+    }
+
+    function togglePause(){
+      if(over) return;      // the game-over overlay owns the screen
+      setPaused(!paused);
+    }
+
+    // A turn is only accepted if it is not a direct reversal into the neck.
+    function turn(x, y){
+      if(over || paused) return;
+      if(dir.x === -x && dir.y === -y) return;
+      nextDir = {x, y};
+    }
+
+    // When a link or a button has focus, the browser owns the keyboard: Tab moves on,
+    // Enter follows the back link, Space presses the button. Swallowing those here
+    // would break the back-to-launcher link and double-fire pause, so the game keys
+    // stand down while an interactive element is focused.
+    function keysBelongToBrowser(e){
+      if(e.key === 'Tab') return true;
+      const t = e.target;
+      if(!t || !t.closest) return false;
+      return !!t.closest('a[href], button, input, select, textarea, [contenteditable="true"]');
+    }
+
+    // Controls: keyboard (arrows and WASD to turn, P to pause, Enter/Space to restart)
+    window.addEventListener('keydown', (e)=>{
+      if(keysBelongToBrowser(e)) return;
+      const k = e.key;
+      const low = typeof k === 'string' ? k.toLowerCase() : '';
+      if(k === 'ArrowUp'    || low === 'w'){ turn(0,-1); e.preventDefault(); }
+      else if(k === 'ArrowDown'  || low === 's'){ turn(0,1);  e.preventDefault(); }
+      else if(k === 'ArrowLeft'  || low === 'a'){ turn(-1,0); e.preventDefault(); }
+      else if(k === 'ArrowRight' || low === 'd'){ turn(1,0);  e.preventDefault(); }
+      else if(low === 'p'){ togglePause(); e.preventDefault(); }
+      else if(k === 'Enter' || k === ' '){
+        if(over){ reset(); e.preventDefault(); }
+      }
+    });
+
+    // Touch: swipe the board to turn, tap to restart after a game over.
+    // The on-screen Pause button covers pausing on touch devices.
+    let touchStart = null;
+    canvas.addEventListener('touchstart', (e)=>{
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      touchStart = {x:t.clientX, y:t.clientY};
+    }, {passive:false});
+
+    canvas.addEventListener('touchend', (e)=>{
+      e.preventDefault();
+      if(over){ reset(); touchStart = null; return; }
+      if(!touchStart) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - touchStart.x;
+      const dy = t.clientY - touchStart.y;
+      touchStart = null;
+      if(Math.abs(dx) < 20 && Math.abs(dy) < 20) return;  // a tap, not a swipe
+      if(Math.abs(dx) > Math.abs(dy)) turn(dx > 0 ? 1 : -1, 0);
+      else turn(0, dy > 0 ? 1 : -1);
+    }, {passive:false});
+
+    // Mouse click restarts after a game over, so a desktop player never has to
+    // hunt for the keyboard.
+    canvas.addEventListener('click', ()=>{ if(over) reset(); });
+
+    // Pause button: click and touch
+    pauseBtn.addEventListener('click', togglePause);
+    pauseBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); togglePause(); }, {passive:false});
+
+    // Losing focus (tab switch, phone call) pauses rather than kills the run.
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.hidden && !over && !paused) setPaused(true);
+    });
+
+    function move(){
+      dir = nextDir;
+      const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+      // Walls end the run.
+      if(head.x < 0 || head.y < 0 || head.x >= COLS || head.y >= ROWS){
+        setOver(true);
+        return;
+      }
+      // Biting the body ends the run; the tail cell is free this tick unless we eat.
+      const eating = fruit && head.x === fruit.x && head.y === fruit.y;
+      const body = eating ? snake : snake.slice(0, snake.length - 1);
+      if(body.some(s => s.x === head.x && s.y === head.y)){
+        setOver(true);
+        return;
+      }
+
+      snake.unshift(head);
+      if(eating){
+        score += 1;
+        updateScore();
+        step = Math.max(MIN_STEP, START_STEP - score * 0.004);
+        placeFruit();
+      } else {
+        snake.pop();
+      }
+    }
+
+    function render(){
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Grid
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 1;
+      for(let x = 1; x < COLS; x++){
+        ctx.beginPath(); ctx.moveTo(x*CELL + 0.5, 0); ctx.lineTo(x*CELL + 0.5, canvas.height); ctx.stroke();
+      }
+      for(let y = 1; y < ROWS; y++){
+        ctx.beginPath(); ctx.moveTo(0, y*CELL + 0.5); ctx.lineTo(canvas.width, y*CELL + 0.5); ctx.stroke();
+      }
+
+      // Fruit
+      if(fruit){
+        ctx.fillStyle = '#e5534b';
+        ctx.beginPath();
+        ctx.arc(fruit.x*CELL + CELL/2, fruit.y*CELL + CELL/2, CELL/2 - 3, 0, Math.PI*2);
+        ctx.fill();
+      }
+
+      // Snake: head brighter than the body
+      for(let i = snake.length - 1; i >= 0; i--){
+        ctx.fillStyle = i === 0 ? '#0db' : '#0a9';
+        ctx.fillRect(snake[i].x*CELL + 1, snake[i].y*CELL + 1, CELL - 2, CELL - 2);
+      }
+    }
+
+    // Fixed-step game loop: the snake moves on a timer, the canvas repaints per frame.
+    let last = performance.now();
+    function loop(t){
+      const dt = Math.min(0.25, (t - last) / 1000);
+      last = t;
+      if(!paused && !over){
+        acc += dt;
+        while(acc >= step && !over){
+          acc -= step;
+          move();
+        }
+        render();
+      }
+      requestAnimationFrame(loop);
+    }
+
+    // Fit the board to the viewport while keeping the 3:2 aspect ratio.
+    function fit(){
+      const maxW = Math.min(window.innerWidth - 24, 800);
+      const maxH = window.innerHeight - 140;
+      const scale = Math.max(0.4, Math.min(1, maxW / canvas.width, maxH / canvas.height));
+      canvas.style.width = Math.round(canvas.width * scale) + 'px';
+      canvas.style.height = Math.round(canvas.height * scale) + 'px';
+    }
+    window.addEventListener('resize', fit);
+    fit();
+
+    reset();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
