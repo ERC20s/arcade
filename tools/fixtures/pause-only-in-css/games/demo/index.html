@@ -1,0 +1,23 @@
+<!--
+Title: Demo
+Description: Fixture game whose only pause markers live inside a style block.
+Controls: Arrow keys or tap to move; there is no pause affordance on purpose.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Demo</title>
+  <style>
+    /* Rules for a pause UI this file never renders. If the checker stopped
+       skipping <style>, this file would wrongly pass. */
+    [id="pauseBtn"] { display: none; }
+    [id="pauseOverlay"] { display: none; }
+    .hud::after { content: "Paused"; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../../index.html">&larr; Arcade</a>
+  <p>Score: <span id="score">0</span></p>
+</body>
+</html>

@@ -130,7 +130,9 @@ payments:
 run:
   {
     "arcade": { "cmd": "npx --yes serve -l 5002 .", "port": 5002 },
-    // Switched off on purpose: the checker is a one-shot command, not a server.
-    // Delete the "// " to give it a terminal, or just run `npm run check`.
-    "check": { "cmd": "npm run check" }
+    // The checker and its self-test are one-shot commands, not servers: each
+    // has its own terminal that runs once and exits. Neither declares a port,
+    // so "arcade" stays the entry the public site is proxied to.
+    "check": { "cmd": "npm run check" },
+    "test": { "cmd": "npm test" }
   }

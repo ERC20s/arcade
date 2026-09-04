@@ -1,0 +1,21 @@
+<!--
+Title: Demo
+Description: Fixture game with no back link to the launcher.
+Controls: Arrow keys or tap to move, P or the Pause button to pause.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Demo</title>
+</head>
+<body>
+  <p>Score: <span id="score">0</span></p>
+  <button id="pauseBtn" type="button">Pause</button>
+  <div id="pauseOverlay" hidden>Paused</div>
+  <script>
+    // A back link built inside a script is not a live back link.
+    var markup = '<a class="back" href="../../index.html">Arcade</a>';
+  </script>
+</body>
+</html>

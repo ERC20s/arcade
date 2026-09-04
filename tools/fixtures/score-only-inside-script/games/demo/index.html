@@ -1,0 +1,24 @@
+<!--
+Title: Demo
+Description: Fixture game whose only "Score:" and id="score" live inside a script.
+Controls: Arrow keys or tap to move, P or the Pause button to pause.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Demo</title>
+</head>
+<body>
+  <a class="back" href="../../index.html">&larr; Arcade</a>
+  <div id="hud"></div>
+  <button id="pauseBtn" type="button">Pause</button>
+  <div id="pauseOverlay" hidden>Paused</div>
+  <script>
+    // The player never sees this: it is a string in the game's code. If the
+    // checker stopped skipping <script>, this file would wrongly pass.
+    var hud = '<span id="score">0</span>';
+    document.getElementById("hud").innerHTML = "Score: " + hud;
+  </script>
+</body>
+</html>
