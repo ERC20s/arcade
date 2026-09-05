@@ -281,6 +281,20 @@ function checkGameFile(rel, { registration }) {
   const html = read(rel);
   const fields = checkMetadata(rel, html);
 
+  // Enforce minimal Controls content: the Controls: metadata must mention a
+  // movement affordance (Arrow keys or WASD), an action input (Space/Enter/tap/action)
+  // and a pause affordance (P or Pause). This is a conservative, token-based
+  // check to catch common omissions; keep the diagnostic short and actionable.
+  if (fields && fields.Controls) {
+    const controls = fields.Controls;
+    const movementRe = /\b(?:arrow|arrows|wasd)\b/i;
+    const actionRe = /\b(?:space|enter|tap|action)\b/i;
+    const pauseRe = /\b(?:P|Pause)\b/i;
+    if (!movementRe.test(controls) || !actionRe.test(controls) || !pauseRe.test(controls)) {
+      fail(rel, 1, 'missing required Controls details: include movement (Arrow or WASD), an action (Space/Enter/tap) and pause (P/Pause)');
+    }
+  }
+
   const lines = countLines(html);
   if (lines > MAX_LINES) {
     fail(rel, lines, `file is ${lines} lines; the limit is ${MAX_LINES}`);

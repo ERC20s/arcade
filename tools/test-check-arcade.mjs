@@ -132,6 +132,12 @@ const CASES = [
       for (let i = 1; i <= 400; i++) padding += `<!-- padding line ${i} -->\n`;
       appendFileSync(game, padding, "utf8");
     }
+  },
+  {
+    name: "a Controls field that omits required tokens is rejected",
+    overlay: "controls-missing",
+    exit: 1,
+    includes: ["games/demo/index.html", "missing required Controls details"]
   }
 ];
 
