@@ -12,7 +12,7 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
   <title>Template Runner</title>
   <style>
     html,body{height:100%;margin:0;font-family:sans-serif;background:#111;color:#eee}
-    canvas{display:block;background:#222;margin:0 auto}
+    canvas{display:block;background:#222;margin:0 auto;touch-action:none}
     #hud{position:fixed;left:10px;top:10px;font-size:18px}
     #pauseBtn{position:fixed;right:10px;top:10px;min-width:44px;min-height:44px;padding:8px 12px;background:#444;color:#fff;border-radius:6px;touch-action:none;z-index:10}
     /* The overlay sits under the controls and never eats a tap: the back link and
@@ -48,8 +48,9 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
     const pauseOverlay = document.getElementById('pauseOverlay');
 
     let w = canvas.width, h = canvas.height;
-    let x = 50, y = h/2 - 10, vx = 0;
+    let x = 50, y = h/2 - 10, vx = 0; // vx is pixels per second
     let score = 0;
+    let scoreAcc = 0; // fractional accumulator so visible score steps cleanly
     let paused = false;
 
     function setPaused(v){
@@ -76,8 +77,8 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
     // Controls: keyboard
     window.addEventListener('keydown', (e)=>{
       if(keysBelongToBrowser(e)) return;
-      if(e.key === 'ArrowRight' || e.key === 'd') { vx = 2; e.preventDefault(); }
-      if(e.key === 'ArrowLeft' || e.key === 'a') { vx = -2; e.preventDefault(); }
+      if(e.key === 'ArrowRight' || e.key === 'd') { vx = 120; e.preventDefault(); } // pixels per second
+      if(e.key === 'ArrowLeft' || e.key === 'a') { vx = -120; e.preventDefault(); }
       if(e.key === ' ') { score += 1; scoreEl.textContent = score; e.preventDefault(); }
       if(e.key.toLowerCase() === 'p') setPaused(!paused);
     });
@@ -101,7 +102,8 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
     // Simple game loop
     let last = performance.now();
     function loop(t){
-      const dt = (t - last) / 1000; last = t;
+      const dt = Math.min(0.25, (t - last) / 1000);
+      last = t;
       if(!paused){
         update(dt);
         render();
@@ -110,12 +112,18 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
     }
 
     function update(dt){
-      x += vx;
+      // vx is pixels per second, so multiply by dt to get pixels this frame
+      x += vx * dt;
       if(x < 0) x = 0;
       if(x > w-20) x = w-20;
-      // increase score slowly as time passes
-      score += Math.floor(dt * 10);
-      scoreEl.textContent = score;
+      // increase score slowly as time passes: add ~10 points per second using a fractional accumulator
+      scoreAcc += dt * 10;
+      if(scoreAcc >= 1){
+        const add = Math.floor(scoreAcc);
+        score += add;
+        scoreAcc -= add;
+        scoreEl.textContent = score;
+      }
     }
 
     function render(){

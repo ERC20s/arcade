@@ -40,6 +40,7 @@ Accessibility and UX
 
 Template
 - A minimal template is included at template/game-template/index.html. Copy it into games/<name>/index.html and edit the metadata block and game code.
+- Game loops must be time-based: use delta-time (dt) in seconds and express velocities in units per second. Clamp dt to a reasonable maximum (we recommend 0.25) to avoid large jumps after backgrounding, and use fractional accumulators for counters so visible numbers step cleanly. The template demonstrates the pattern.
 - The template now ships with the back-to-launcher link already in place (<a class="back" href="../../index.html">), sized as a 44x44 tap target, with a visible focus outline and above the pause overlay. Keep it when you copy the template, and keep its href pointing at ../../index.html, which resolves to the root launcher from games/<name>/index.html.
 - The template's global keydown handler stands down for Tab, and for Enter and Space while a link or button has focus, so those keys keep working on the back link and the pause button while movement and pause keys stay with the game. If you rewrite the input handling, preserve that guard as written — do not widen it back to every key.
 - Everything else is still on you: the template is a starting point, not proof of compliance, and your game still needs the launcher list entry described above before it can be merged.
