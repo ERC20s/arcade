@@ -281,6 +281,35 @@ function checkGameFile(rel, { registration }) {
   const html = read(rel);
   const fields = checkMetadata(rel, html);
 
+  // Title: ensure the document's <title> starts with the metadata Title.
+  // Scan all <title> elements with a global regex and ignore any that fall
+  // inside excluded ranges (comments, <script> and <style> blocks). Decode
+  // HTML entities and normalise whitespace before testing a case-insensitive
+  // starts-with match against the metadata Title.
+  if (fields && fields.Title) {
+    const skipForTitle = excludedRanges(html);
+    const titleRe = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/gi;
+    let tm;
+    let titleFound = false;
+    let titleOk = false;
+    while ((tm = titleRe.exec(html))) {
+      const idx = tm.index;
+      if (inRanges(skipForTitle, idx)) continue;
+      titleFound = true;
+      const inner = tm[1];
+      const decoded = inner.replace(/&[a-z#0-9]+;/gi, (e) => (e in ENTITIES ? ENTITIES[e] : e)).replace(/\s+/g, " ").trim();
+      if (decoded.toLowerCase().startsWith(fields.Title.toLowerCase())) {
+        titleOk = true;
+        break;
+      }
+    }
+    if (!titleFound) {
+      fail(rel, 0, "missing <title> element in the page");
+    } else if (!titleOk) {
+      fail(rel, 0, `page <title> does not start with the game's Title "${fields.Title}"`);
+    }
+  }
+
   // Enforce minimal Controls content: the Controls: metadata must mention a
   // movement affordance (Arrow keys or WASD), an action input (Space/Enter/tap/action)
   // and a pause affordance (P or Pause). This is a conservative, token-based

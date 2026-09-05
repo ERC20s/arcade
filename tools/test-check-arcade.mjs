@@ -138,6 +138,12 @@ const CASES = [
     overlay: "controls-missing",
     exit: 1,
     includes: ["games/demo/index.html", "missing required Controls details"]
+  },
+  {
+    name: "a page whose <title> does not start with the metadata Title is rejected",
+    overlay: "title-mismatch",
+    exit: 1,
+    includes: ["games/demo/index.html", "page <title> does not start with the game's Title"]
   }
 ];
 
