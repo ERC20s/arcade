@@ -151,6 +151,18 @@ const CASES = [
     overlay: "title-mismatch",
     exit: 1,
     includes: ["games/demo/index.html", "page <title> does not start with the game's Title"]
+  },
+  {
+    name: "a metadata Description that is too long is rejected",
+    overlay: "metadata-description-too-long",
+    exit: 1,
+    includes: ["games/demo/index.html", "Description is" ]
+  },
+  {
+    name: "a launcher label with an overlong description is rejected",
+    overlay: "launcher-description-too-long",
+    exit: 1,
+    includes: ["index.html", "launcher link description is"]
   }
 ];
 
