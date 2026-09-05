@@ -163,6 +163,12 @@ const CASES = [
     overlay: "launcher-description-too-long",
     exit: 1,
     includes: ["index.html", "launcher link description is"]
+  },
+  {
+    name: "a game missing the viewport meta is rejected",
+    overlay: "missing-viewport",
+    exit: 1,
+    includes: ["games/demo/index.html", 'missing <meta name="viewport"']
   }
 ];
 

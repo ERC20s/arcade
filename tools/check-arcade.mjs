@@ -341,6 +341,26 @@ function checkGameFile(rel, { registration }) {
     fail(rel, lines, `file is ${lines} lines; the limit is ${MAX_LINES}`);
   }
 
+  // Require a live <meta name="viewport"> in the page head. The check skips
+  // comments and <script>/<style> blocks using excludedRanges so only what the
+  // player actually sees counts. If none is found outside excluded ranges, fail.
+  const skipForMeta = excludedRanges(html);
+  let metaFound = false;
+  const metaRe = /<meta\b([^>]*)>/gi;
+  let mm;
+  while ((mm = metaRe.exec(html))) {
+    const idx = mm.index;
+    if (inRanges(skipForMeta, idx)) continue;
+    const attrs = mm[1];
+    if (/\bname\s*=\s*(?:(["'])viewport\1|viewport\b)/i.test(attrs)) {
+      metaFound = true;
+      break;
+    }
+  }
+  if (!metaFound) {
+    fail(rel, 0, 'missing <meta name="viewport"> tag (required for proper mobile/touch scaling)');
+  }
+
   // Look for live <a ...> anchors whose href points exactly at BACK_HREF,
   // ignoring comment, script and style ranges, accepting single or double quotes and any
   // attribute order. If such an anchor exists but its class attribute does
