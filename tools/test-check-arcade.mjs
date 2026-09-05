@@ -98,6 +98,12 @@ const CASES = [
     includes: ["games/demo/index.html", "missing pause affordance"]
   },
   {
+    name: "a pause overlay that intercepts taps is rejected",
+    overlay: "pause-overlay-eats-tap",
+    exit: 1,
+    includes: ["games/demo/index.html", "pause overlay may capture taps"]
+  },
+  {
     name: "a game missing from the launcher is rejected",
     overlay: "unregistered-game",
     exit: 1,

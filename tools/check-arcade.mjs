@@ -489,6 +489,62 @@ function checkGameFile(rel, { registration }) {
     fail(rel, 0, 'missing pause affordance: add an on-screen pause button (id="pauseBtn") or a pause overlay (id="pauseOverlay") to the markup (a match inside <script>, <style> or a comment does not count)');
   }
 
+  // If a pause overlay exists in the live DOM, ensure it will not capture pointer
+  // interactions. We accept either an inline style on the element that contains
+  // pointer-events: none, or a <style> block rule targeting #pauseOverlay or
+  // .pauseOverlay that sets pointer-events: none. This is a conservative,
+  // regex-based heuristic mirroring other checks in this file.
+  if (foundOutsideExcluded(idPauseOverlayRe)) {
+    // Find the first occurrence index of the live pauseOverlay for diagnostics
+    const g = new RegExp(idPauseOverlayRe.source, 'gi');
+    let pm;
+    let pauseIdx = -1;
+    while ((pm = g.exec(html))) {
+      const idx = pm.index;
+      if (!inRanges(skip, idx)) { pauseIdx = idx; break; }
+    }
+    const pauseLine = pauseIdx !== -1 ? lineOf(html, pauseIdx) : 0;
+
+    // Search for an inline style on the pause element with pointer-events:none
+    const tagRe = /<[^>]*\bid\s*=\s*(?:(['"])pauseOverlay\1|pauseOverlay\b)([^>]*)>/gi;
+    let tm2;
+    let inlineEvidence = false;
+    while ((tm2 = tagRe.exec(html))) {
+      const idx2 = tm2.index;
+      if (inRanges(skip, idx2)) continue;
+      const tagText = tm2[0];
+      const styleMatch = tagText.match(/\bstyle\s*=\s*(['"])([\s\S]*?)\1/i);
+      if (styleMatch && /\bpointer-events\s*:\s*none\b/i.test(styleMatch[2])) {
+        inlineEvidence = true;
+        break;
+      }
+    }
+
+    // If no inline evidence, search <style> blocks for rules that target the
+    // overlay and set pointer-events: none.
+    if (!inlineEvidence) {
+      const styleBlockRe = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
+      let sb;
+      let styleEvidence = false;
+      while ((sb = styleBlockRe.exec(html))) {
+        const css = sb[1];
+        // Very small CSS rule parser: selector { body }
+        const ruleRe = /([^{}]+)\{([^}]*)\}/g;
+        let rm;
+        while ((rm = ruleRe.exec(css))) {
+          const selector = rm[1];
+          const body = rm[2];
+          if (!/(#pauseOverlay|\.pauseOverlay|\[id\s*=\s*(['"]?)pauseOverlay\2\])/i.test(selector)) continue;
+          if (/\bpointer-events\s*:\s*none\b/i.test(body)) { styleEvidence = true; break; }
+        }
+        if (styleEvidence) break;
+      }
+      if (!styleEvidence) {
+        fail(rel, pauseLine, 'pause overlay may capture taps: ensure #pauseOverlay uses pointer-events:none or otherwise does not intercept input');
+      }
+    }
+  }
+
   checkFolder(rel);
 
   if (registration) {
