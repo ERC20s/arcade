@@ -186,11 +186,14 @@ function readLauncher() {
   while ((m = anchor.exec(block))) {
     if (inRanges(skip, m.index)) continue; // an example inside a comment is not an entry
     const attrs = m[1];
-    const href = (attrs.match(/\bhref="([^"]*)"/i) || [])[1] || "";
+    const hrefMatch = attrs.match(/\bhref\s*=\s*(['\"])(.*?)\1/i);
+    const href = hrefMatch ? hrefMatch[2] : "";
+    const classMatch = attrs.match(/\bclass\s*=\s*(['\"])(.*?)\1/i);
+    const hasGameClass = classMatch ? /\bgame\b/i.test(classMatch[2]) : false;
     entries.push({
       href,
       label: text(m[2]),
-      hasGameClass: /\bclass="[^"]*\bgame\b[^"]*"/i.test(attrs),
+      hasGameClass,
       line: lineOf(html, blockStart + m.index)
     });
   }

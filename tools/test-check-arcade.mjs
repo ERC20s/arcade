@@ -116,6 +116,13 @@ const CASES = [
     includes: ["index.html", "dead launcher link", "games/ghost/index.html"]
   },
   {
+    name: "single-quoted attributes in the launcher are accepted",
+    overlay: "launcher-single-quotes",
+    exit: 0,
+    includes: ["arcade check passed", "games/demo/index.html"],
+    excludes: ["problem", "missing", "dead launcher link"]
+  },
+  {
     name: "a stray .js file in a game folder is rejected",
     overlay: "stray-js-in-game-folder",
     exit: 1,
