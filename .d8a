@@ -129,6 +129,7 @@ payments:
 # (the VSD8A extension) and by nothing else.
 run:
   {
+    "web": { "cmd": "npm run arcade", "port": 5002 },
     "arcade": { "cmd": "npm run arcade", "port": 5002 },
     // The checker and its self-test are one-shot commands, not servers: each
     // has its own terminal that runs once and exits. Neither declares a port,
