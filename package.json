@@ -4,6 +4,7 @@
   "private": true,
   "description": "Small browser games, one folder each, zero dependencies, behind a shared launcher. This manifest exists only to expose the arcade checker; games themselves stay dependency-free single HTML files.",
   "scripts": {
+    "arcade": "npx --yes serve -l 5002 .",
     "check": "node tools/check-arcade.mjs",
     "test": "node tools/test-check-arcade.mjs"
   }
