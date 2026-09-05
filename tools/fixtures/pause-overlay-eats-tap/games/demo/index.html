@@ -1,0 +1,21 @@
+<!--
+Title: Demo
+Description: Fixture game whose pause overlay exists but does not set pointer-events:none.
+Controls: Arrow keys or tap to move; press P to pause.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Demo</title>
+  <style>
+    /* Pause overlay present but without pointer-events:none */
+    #pauseOverlay { position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); }
+  </style>
+</head>
+<body>
+  <a class="back" href="../../index.html">← Arcade</a>
+  <div id="pauseOverlay"></div>
+  <p>Score: <span id="score">0</span></p>
+</body>
+</html>
