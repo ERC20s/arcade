@@ -291,10 +291,20 @@ function checkGameFile(rel, { registration }) {
   // attribute order. If such an anchor exists but its class attribute does
   // not include the token 'back' (case-insensitive, as a space-separated
   // token), report a single-line diagnostic pointing at the anchor's line.
+  // Additionally require evidence that the back link will be a tappable target
+  // (44×44 CSS pixels): either inline style on the anchor with min-/width/height
+  // declarations in pixels >= 44, or a <style> block rule targeting a.back or
+  // .back that sets min-width/min-height/width/height to >= 44px. This is a
+  // conservative, regex-based heuristic and intentionally only looks for
+  // literal px declarations inside the game's file.
   const skip = excludedRanges(html);
   const anchorRe = /<a\b([^>]*)>/gi;
   let m;
   let found = false;
+  let sizeEvidence = false;
+  // Keep a line number for the first back anchor with class so diagnostics point
+  // at a useful location when tappable evidence is missing.
+  let firstBackLine = 0;
   while ((m = anchorRe.exec(html))) {
     const idx = m.index;
     if (inRanges(skip, idx)) continue;
@@ -313,10 +323,64 @@ function checkGameFile(rel, { registration }) {
     if (!hasBack) {
       const line = lineOf(html, idx);
       fail(rel, line, 'missing class="back" on back link');
+      continue;
+    }
+    // Record the line of the first back anchor with class for later diagnostics.
+    if (!firstBackLine) firstBackLine = lineOf(html, idx);
+
+    // Check inline style attribute for px-based width/height/min-* rules >= 44
+    const styleMatch = attrs.match(/\bstyle\s*=\s*(['"])([\s\S]*?)\1/i);
+    if (styleMatch && styleMatch[2]) {
+      const styleText = styleMatch[2];
+      const dimRe = /(?:min-width|min-height|width|height)\s*:\s*([0-9]+)px/gi;
+      let dm;
+      while ((dm = dimRe.exec(styleText))) {
+        const n = Number(dm[1]);
+        if (!Number.isNaN(n) && n >= 44) {
+          sizeEvidence = true;
+          break;
+        }
+      }
+      if (sizeEvidence) break;
+    }
+    // If no inline evidence yet, continue to next anchor and we'll scan <style>
+    // blocks once after the anchor loop; a later anchor might have inline evidence.
+  }
+
+  // If we haven't found inline evidence but we did find at least one back anchor
+  // with class="back", search the file's <style> blocks for rules that target
+  // a.back or .back and declare pixel-based dimensions >= 44.
+  if (!sizeEvidence && firstBackLine) {
+    const styleBlockRe = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
+    let sbm;
+    while ((sbm = styleBlockRe.exec(html))) {
+      const css = sbm[1];
+      // Very small CSS rule parser: selector { body }
+      const ruleRe = /([^{}]+)\{([^}]*)\}/g;
+      let rm;
+      while ((rm = ruleRe.exec(css))) {
+        const selector = rm[1];
+        const body = rm[2];
+        if (!/\b(a\.back|\.back)\b/i.test(selector)) continue;
+        const dimRe = /(?:min-width|min-height|width|height)\s*:\s*([0-9]+)px/gi;
+        let dm;
+        while ((dm = dimRe.exec(body))) {
+          const n = Number(dm[1]);
+          if (!Number.isNaN(n) && n >= 44) {
+            sizeEvidence = true;
+            break;
+          }
+        }
+        if (sizeEvidence) break;
+      }
+      if (sizeEvidence) break;
     }
   }
+
   if (!found) {
     fail(rel, 0, `no back link to the launcher: expected <a class="back" href="${BACK_HREF}">`);
+  } else if (firstBackLine && !sizeEvidence) {
+    fail(rel, firstBackLine, 'back link does not show tappable-size evidence: add an inline style or a <style> rule targeting a.back or .back that sets min-width/min-height/width/height to at least 44px (see CONTRIBUTING.md)');
   }
 
   // Require a visible score indicator and a pause affordance. Both searches use
