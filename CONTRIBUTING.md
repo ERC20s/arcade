@@ -14,6 +14,12 @@ Required metadata
   -->
 - The launcher and reviewers will read these fields to show the game list and basic info.
 
+Title and launcher label limits
+- Keep metadata concise: the Title should be at most 60 characters and the Description at most 140 characters.
+- The launcher's link text must be exactly the game's Title, then an em-dash (—), then a one-line description copied from the game's Description field. Example:
+  <li><a class="game" href="games/<name>/index.html">My Game — Fast one-line summary</a></li>
+- These limits keep the launcher grid readable and make automated checks deterministic. If your game needs relaxed limits for a specific reason, open an issue explaining why.
+
 Size constraint
 - The 400-line limit applies to games/<name>/index.html: that file must be <= 400 lines. Static assets in the folder are not counted.
 - Keep code concise; utility comments are fine.

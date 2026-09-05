@@ -76,6 +76,8 @@ function rootFromArgv(argv) {
 
 const ROOT = rootFromArgv(process.argv.slice(2));
 const MAX_LINES = 400;
+const MAX_TITLE = 60;
+const MAX_DESCRIPTION = 140;
 const LAUNCHER = "index.html";
 const TEMPLATE = "template/game-template/index.html";
 const GAMES_DIR = "games";
@@ -290,6 +292,11 @@ function checkGameFile(rel, { registration }) {
   // HTML entities and normalise whitespace before testing a case-insensitive
   // starts-with match against the metadata Title.
   if (fields && fields.Title) {
+    // Enforce Title length
+    if (fields.Title.length > MAX_TITLE) {
+      fail(rel, 1, `metadata Title is ${fields.Title.length} characters; the limit is ${MAX_TITLE}`);
+    }
+
     const skipForTitle = excludedRanges(html);
     const titleRe = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/gi;
     let tm;
@@ -469,8 +476,20 @@ function checkGameFile(rel, { registration }) {
     } else if (fields && fields.Title) {
       const entry = registration.entries.find((e) => e.href.replace(/^\.\//, "").split(/[?#]/)[0] === rel);
       const label = entry ? entry.label : "";
-      if (!label.toLowerCase().startsWith(fields.Title.toLowerCase())) {
-        fail(LAUNCHER, line, `launcher link text "${label}" does not start with the game's Title "${fields.Title}" (${rel})`);
+      // Require the launcher label to be exactly: Title — one-line description
+      // i.e. the Title, optional surrounding whitespace, an em-dash (—), then
+      // a non-empty one-line description. Also enforce description length.
+      const re = new RegExp('^' + fields.Title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*—\\s*(.+)$', 'i');
+      const m = label.match(re);
+      if (!m) {
+        fail(LAUNCHER, line, `launcher link text "${label}" must be "${fields.Title} — one-line description" (Title, an em-dash, then a one-line description)`);
+      } else {
+        const desc = m[1].trim();
+        if (desc.length === 0) {
+          fail(LAUNCHER, line, `launcher link description is empty; expected non-empty one-line description after the em-dash`);
+        } else if (desc.length > MAX_DESCRIPTION) {
+          fail(LAUNCHER, line, `launcher link description is ${desc.length} characters; the limit is ${MAX_DESCRIPTION}`);
+        }
       }
     }
   }
