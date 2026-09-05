@@ -76,6 +76,8 @@ function rootFromArgv(argv) {
 
 const ROOT = rootFromArgv(process.argv.slice(2));
 const MAX_LINES = 400;
+const MAX_TITLE = 60;
+const MAX_DESCRIPTION = 140;
 const LAUNCHER = "index.html";
 const TEMPLATE = "template/game-template/index.html";
 const GAMES_DIR = "games";
@@ -252,6 +254,13 @@ function checkMetadata(rel, html) {
     const m = block.match(new RegExp("^\\s*" + label + ":\\s*(\\S.*?)\\s*$", "m"));
     if (!m) fail(rel, 1, `metadata comment is missing a non-empty "${label}:" field`);
     else fields[label] = m[1];
+  }
+  // Enforce length limits on Title and Description to match CONTRIBUTING.md
+  if (fields.Title && fields.Title.length > MAX_TITLE) {
+    fail(rel, 1, `Title is ${fields.Title.length} characters; the limit is ${MAX_TITLE}`);
+  }
+  if (fields.Description && fields.Description.length > MAX_DESCRIPTION) {
+    fail(rel, 1, `Description is ${fields.Description.length} characters; the limit is ${MAX_DESCRIPTION}`);
   }
   return fields;
 }
@@ -469,8 +478,19 @@ function checkGameFile(rel, { registration }) {
     } else if (fields && fields.Title) {
       const entry = registration.entries.find((e) => e.href.replace(/^\.\//, "").split(/[?#]/)[0] === rel);
       const label = entry ? entry.label : "";
-      if (!label.toLowerCase().startsWith(fields.Title.toLowerCase())) {
-        fail(LAUNCHER, line, `launcher link text "${label}" does not start with the game's Title "${fields.Title}" (${rel})`);
+      // Enforce exact 'Title — description' format in the launcher label: an em-dash with spaces
+      const dashMatch = label.match(/^(.+?)\s+—\s+(.*)$/);
+      if (!dashMatch) {
+        fail(LAUNCHER, line, `launcher link label must be in the form "Title — one-line description" (em-dash with spaces): found "${label}"`);
+      } else {
+        const head = dashMatch[1];
+        const desc = dashMatch[2];
+        if (head.toLowerCase() !== fields.Title.toLowerCase()) {
+          fail(LAUNCHER, line, `launcher link text "${label}" does not start with the game's Title "${fields.Title}" (${rel})`);
+        }
+        if (desc.length > MAX_DESCRIPTION) {
+          fail(LAUNCHER, line, `launcher link description is ${desc.length} characters; the limit is ${MAX_DESCRIPTION}`);
+        }
       }
     }
   }

@@ -8,11 +8,12 @@ Folder layout
 Required metadata
 - Each index.html must start with an HTML comment block containing these fields (exact labels):
   <!--
-  Title: Short game title
-  Description: One-sentence summary (what the player does)
+  Title: Short game title (max 60 characters)
+  Description: One-sentence summary (what the player does) (max 140 characters)
   Controls: List of controls (keyboard + touch)
   -->
 - The launcher and reviewers will read these fields to show the game list and basic info.
+- The launcher's link label must exactly match the game's Title and Description separated by an em-dash with spaces: Title — one-line description (Description max 140 characters).
 
 Size constraint
 - The 400-line limit applies to games/<name>/index.html: that file must be <= 400 lines. Static assets in the folder are not counted.
