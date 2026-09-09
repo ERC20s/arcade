@@ -130,10 +130,10 @@ payments:
 run:
   {
     "web": { "cmd": "npm run arcade", "port": 5002 },
-    "arcade": { "cmd": "npm run arcade", "port": 5002 },
+    "// arcade": { "cmd": "npm run arcade", "port": 5002 },
     // The checker and its self-test are one-shot commands, not servers: each
     // has its own terminal that runs once and exits. Neither declares a port,
-    // so "arcade" stays the entry the public site is proxied to.
+    // so "web" stays the entry the public site is proxied to.
     "check": { "cmd": "npm run check" },
     "test": { "cmd": "npm test" }
   }
