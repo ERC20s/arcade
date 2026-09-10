@@ -193,6 +193,12 @@ const CASES = [
     overlay: "external-resource",
     exit: 1,
     includes: ["games/demo/index.html", "external resource"]
+  },
+  {
+    name: "a game that includes an external CSS url() reference is rejected",
+    overlay: "external-css-resource",
+    exit: 1,
+    includes: ["games/demo/index.html", "external resource", "<style> block contains", "inline style uses"]
   }
 ];
 

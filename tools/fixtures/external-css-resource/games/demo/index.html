@@ -1,0 +1,31 @@
+<!--
+Title: External CSS Resource Demo
+Description: A demo that references an external asset from CSS and inline styles.
+Controls: Arrow keys or tap to move, P or the Pause button to pause.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>External CSS Resource Demo</title>
+  <style>
+    /* external background image referenced from a <style> block */
+    body { background-image: url('https://example.com/bg.png'); }
+    .card { width:200px; height:100px; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../../index.html">← Arcade</a>
+  <p>Score: <span id="score">0</span></p>
+  <button id="pauseBtn" type="button">Pause</button>
+  <div id="pauseOverlay" hidden>Paused</div>
+
+  <!-- an element with an inline style that references an external asset -->
+  <div class="card" style="background-image: url(//example.com/inline.png);"></div>
+
+  <script>
+    // game script
+  </script>
+</body>
+</html>
