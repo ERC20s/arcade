@@ -36,7 +36,7 @@ Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Spac
   </style>
 </head>
 <body>
-  <div id="hud">Score: <span id="score">0</span> <span id="best">best 0</span></div>
+  <div id="hud">Score: <span id="score" aria-live="polite" aria-atomic="true">0</span> <span id="best" aria-hidden="true">best 0</span></div>
   <button id="pauseBtn" aria-pressed="false">Pause</button>
   <div id="pauseOverlay" role="status" aria-hidden="true">Paused</div>
   <div id="overOverlay" role="status" aria-hidden="true">

@@ -32,7 +32,7 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
   </style>
 </head>
 <body>
-  <div id="hud">Score: <span id="score">0</span></div>
+  <div id="hud">Score: <span id="score" aria-live="polite" aria-atomic="true">0</span></div>
   <button id="pauseBtn" aria-pressed="false">Pause</button>
   <div id="pauseOverlay" role="status" aria-hidden="true">Paused</div>
   <canvas id="c" width="600" height="400"></canvas>
