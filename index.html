@@ -221,23 +221,79 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
         return Object.keys(meta).length ? meta : null;
       }
 
-      function checkBackLink(doc) {
-        // Prefer a.back, or any <a href> that points to an index.html in an upper folder
-        if (doc.querySelector('a.back[href]')) return true;
-        var anchors = doc.querySelectorAll('a[href]');
+      function checkBackLink(doc, text) {
+        // Require an explicit <a class="back" href="...index.html"> target.
+        // Also look for tappable-size evidence (width/height/min-* >= 44px) either
+        // inline on the anchor or in a <style> rule targeting a.back / .back.
+        var msgs = [];
+        var anchors = Array.prototype.slice.call(doc.querySelectorAll('a[href]'));
+        var foundAny = false;
+        var foundWithClass = null;
+        var foundWithoutClass = null;
         for (var i = 0; i < anchors.length; i++) {
-          var href = anchors[i].getAttribute('href') || '';
+          var a = anchors[i];
+          var href = a.getAttribute('href') || '';
           try {
             var resolved = new URL(href, location.href);
             if (resolved.pathname && /index\.html$/.test(resolved.pathname) && resolved.origin === location.origin) {
-              // don't count a self-link
-              if (resolved.pathname !== location.pathname) return true;
+              if (resolved.pathname === location.pathname) continue; // self-link
+              foundAny = true;
+              if (a.classList && a.classList.contains('back')) { foundWithClass = a; break; }
+              if (!foundWithoutClass) foundWithoutClass = a;
             }
           } catch (e) {
             // ignore malformed
           }
         }
-        return false;
+
+        if (!foundAny) {
+          msgs.push('no back link to the launcher: expected <a class="back" href="../../index.html">');
+          return msgs;
+        }
+        if (!foundWithClass) {
+          msgs.push('missing class="back" on back link');
+          // cannot check tappable size if no class=back to target
+          return msgs;
+        }
+
+        // At this point we have an element with class="back"; check inline style
+        var sizeEvidence = false;
+        try {
+          var styleText = foundWithClass.getAttribute('style') || '';
+          var dimRe = /(?:min-width|min-height|width|height)\s*:\s*([0-9]+)px/gi;
+          var dm;
+          while ((dm = dimRe.exec(styleText))) {
+            var n = Number(dm[1]);
+            if (!Number.isNaN(n) && n >= 44) { sizeEvidence = true; break; }
+          }
+        } catch (e) { /* ignore */ }
+
+        // If no inline evidence, scan <style> blocks for a.back or .back rules
+        if (!sizeEvidence) {
+          try {
+            var styleBlocks = Array.prototype.slice.call(doc.querySelectorAll('style'));
+            for (var si = 0; si < styleBlocks.length && !sizeEvidence; si++) {
+              var css = styleBlocks[si].textContent || '';
+              var ruleRe = /([^{}]+)\{([^}]*)\}/g;
+              var rm;
+              while ((rm = ruleRe.exec(css))) {
+                var selector = rm[1];
+                var body = rm[2];
+                if (!/\b(a\.back|\.back)\b/i.test(selector)) continue;
+                var dimRe2 = /(?:min-width|min-height|width|height)\s*:\s*([0-9]+)px/gi;
+                var dm2;
+                while ((dm2 = dimRe2.exec(body))) {
+                  var n2 = Number(dm2[1]);
+                  if (!Number.isNaN(n2) && n2 >= 44) { sizeEvidence = true; break; }
+                }
+                if (sizeEvidence) break;
+              }
+            }
+          } catch (e) { /* ignore */ }
+        }
+
+        if (!sizeEvidence) msgs.push('back link does not show tappable-size evidence');
+        return msgs;
       }
 
       function renderBanner(issues) {
@@ -350,8 +406,53 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
                       }
                     }
 
-                    var hasBack = doc ? checkBackLink(doc) : false;
-                    if (!hasBack) problems.push('missing-back-link');
+                    // Back-link checks: returns an array of messages (empty = ok)
+                    if (doc) {
+                      var backMsgs = checkBackLink(doc, text);
+                      backMsgs.forEach(function (m) { problems.push(m); });
+                    } else {
+                      problems.push('missing-back-link');
+                    }
+
+                    // Meta viewport: look for a live <meta name="viewport"> element
+                    try {
+                      var hasViewport = false;
+                      if (doc && doc.querySelector) {
+                        var mv = doc.querySelector('meta[name]');
+                        if (mv) {
+                          // multiple meta[name] may exist; check name attribute explicitly
+                          var metas = doc.querySelectorAll('meta[name]');
+                          for (var mi = 0; mi < metas.length; mi++) {
+                            var name = (metas[mi].getAttribute('name') || '').toLowerCase();
+                            if (name === 'viewport') { hasViewport = true; break; }
+                          }
+                        }
+                      }
+                      if (!hasViewport) problems.push('missing <meta name="viewport">');
+                    } catch (e) { /* ignore */ }
+
+                    // External resources: scan common tags for src/href/data attrs that
+                    // start with http:, https: or //
+                    try {
+                      var externalFound = false;
+                      var tags = ['img','script','link','iframe','audio','video','source','embed','object','track'];
+                      for (var ti = 0; ti < tags.length && !externalFound; ti++) {
+                        var els = doc ? doc.getElementsByTagName(tags[ti]) : [];
+                        for (var ei = 0; ei < els.length; ei++) {
+                          var el = els[ei];
+                          var attrs = ['src','href','data'];
+                          for (var ai = 0; ai < attrs.length; ai++) {
+                            var v = el.getAttribute && el.getAttribute(attrs[ai]);
+                            if (!v) continue;
+                            if (/^\s*(?:https?:|\\\\\/\\\\\/)/i.test(v) || /^\s*\\\\\/\\\\\//.test(v)) {
+                              externalFound = true; break;
+                            }
+                          }
+                          if (externalFound) break;
+                        }
+                      }
+                      if (externalFound) problems.push('external resource in live markup');
+                    } catch (e) { /* ignore */ }
 
                     resolve({ anchor: a, meta: meta, problems: problems });
                   });
