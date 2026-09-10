@@ -124,6 +124,9 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
       per entry as games are merged. The link text must start with the game's
       Title: from its metadata comment — tools/check-arcade.mjs enforces that.
     -->
+    <div class="launcher-controls">
+      <button id="random-game" type="button" aria-label="Play a random game">Play a random game</button>
+    </div>
     <ul id="game-list" tabindex="-1">
       <li><a class="game" href="games/snake/index.html">Snake — eat, grow, do not bite yourself</a></li>
     </ul>
@@ -150,5 +153,39 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
   </main>
 
   <footer>Browser Arcade — shared launcher</footer>
+
+  <script>
+    (function () {
+      function pickRandom(anchorList) {
+        return anchorList[Math.floor(Math.random() * anchorList.length)];
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        var button = document.getElementById('random-game');
+        if (!button) return;
+
+        var anchors = Array.prototype.slice.call(
+          document.querySelectorAll('#game-list a.game[href]')
+        ).filter(function (a) { return (a.getAttribute('href') || '').trim() !== ''; });
+
+        if (!anchors.length) {
+          button.disabled = true;
+          button.setAttribute('aria-disabled', 'true');
+          return;
+        }
+
+        button.disabled = false;
+        button.removeAttribute('aria-disabled');
+
+        button.addEventListener('click', function () {
+          var chosen = pickRandom(anchors);
+          if (chosen && chosen.href) {
+            window.location.href = chosen.href;
+          }
+        });
+
+      });
+    })();
+  </script>
 </body>
 </html>
