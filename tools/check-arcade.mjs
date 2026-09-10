@@ -580,6 +580,9 @@ function checkGameFile(rel, { registration }) {
   // Reject live tags that load external http(s) or protocol-relative resources.
   // Scan common resource-loading tags and flag src/href/data attributes that
   // start with http:, https: or //, ignoring commented/script/style ranges.
+  // Also detect external URLs referenced from CSS url(...) inside inline
+  // style attributes and inside <style> blocks; those are part of the live
+  // page and must not reference remote resources either.
   {
     const externalTags = ["img","script","link","iframe","audio","video","source","embed","object","track"];
     const tagRe = new RegExp("<\\s*(" + externalTags.join("|") + ")\\b([^>]*)>", "gi");
@@ -596,6 +599,39 @@ function checkGameFile(rel, { registration }) {
       if (/^\s*(?:https?:|\\/\\/)/i.test(val)) {
         const line = lineOf(html, idx2);
         fail(rel, line, `external resource in live markup: <${tag}> uses ${val} — games must be self-contained (use data: URIs or inline the asset)`);
+      }
+    }
+
+    // Scan inline style attributes for url(...) referencing http(s) or //
+    const styleAttrRe = /\bstyle\s*=\s*(['"])([\s\S]*?)\1/gi;
+    let sm;
+    while ((sm = styleAttrRe.exec(html))) {
+      const idx3 = sm.index;
+      if (inRanges(skip, idx3)) continue;
+      const styleText = sm[2];
+      // match url(...) where inside it starts with http:, https: or //
+      const cssUrlRe = /url\(\s*['"]?\s*(?:https?:|\\/\\/)[^'"\)\s]+\s*['"]?\s*\)/i;
+      if (cssUrlRe.test(styleText)) {
+        const line = lineOf(html, idx3);
+        const snippetMatch = styleText.match(cssUrlRe);
+        const snippet = snippetMatch ? snippetMatch[0] : "url(...)";
+        fail(rel, line, `external resource in live markup: inline style uses ${snippet} — games must be self-contained (use data: URIs or inline the asset)`);
+      }
+    }
+
+    // Scan <style> blocks for url(...) references to http(s) or // and report
+    // them. These blocks are considered live markup for this purpose.
+    const styleBlockRe = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
+    let sbm;
+    while ((sbm = styleBlockRe.exec(html))) {
+      const css = sbm[1];
+      const idx4 = sbm.index;
+      const cssUrlRe2 = /url\(\s*['"]?\s*(?:https?:|\\/\\/)[^'"\)\s]+\s*['"]?\s*\)/i;
+      if (cssUrlRe2.test(css)) {
+        const line = lineOf(html, idx4);
+        const snippetMatch = css.match(cssUrlRe2);
+        const snippet = snippetMatch ? snippetMatch[0] : "url(...)";
+        fail(rel, line, `external resource in live markup: <style> block contains ${snippet} — games must be self-contained (use data: URIs or inline the asset)`);
       }
     }
   }
