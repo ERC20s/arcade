@@ -177,6 +177,18 @@ const CASES = [
     includes: ["games/demo/index.html", 'missing <meta name="viewport"']
   },
   {
+    name: "a game whose viewport content is non-descriptive is rejected",
+    overlay: "viewport-content-missing",
+    exit: 1,
+    includes: ["games/demo/index.html", 'meta viewport content must include "width=device-width" or "initial-scale=1"']
+  },
+  {
+    name: "a back link that relies on padding is accepted as tappable evidence",
+    overlay: "tappable-padding",
+    exit: 0,
+    includes: ["arcade check passed", "games/demo/index.html"]
+  },
+  {
     name: "a game that includes an external https resource is rejected",
     overlay: "external-resource",
     exit: 1,

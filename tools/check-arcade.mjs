@@ -354,6 +354,15 @@ function checkGameFile(rel, { registration }) {
     const attrs = mm[1];
     if (/\bname\s*=\s*(?:(["'])viewport\1|viewport\b)/i.test(attrs)) {
       metaFound = true;
+      // Validate content: require width=device-width or initial-scale=1
+      const contentMatch = attrs.match(/\bcontent\s*=\s*(['"])([\s\S]*?)\1/i);
+      const contentVal = contentMatch ? contentMatch[2] : "";
+      const hasWidth = /\bwidth\s*=\s*device-width\b/i.test(contentVal);
+      const hasInitial = /\binitial-scale\s*=\s*1\b/i.test(contentVal);
+      if (!contentVal || !(hasWidth || hasInitial)) {
+        const line = lineOf(html, idx);
+        fail(rel, line, 'meta viewport content must include "width=device-width" or "initial-scale=1"');
+      }
       break;
     }
   }
@@ -368,9 +377,9 @@ function checkGameFile(rel, { registration }) {
   // token), report a single-line diagnostic pointing at the anchor's line.
   // Additionally require evidence that the back link will be a tappable target
   // (44×44 CSS pixels): either inline style on the anchor with min-/width/height
-  // declarations in pixels >= 44, or a <style> block rule targeting a.back or
-  // .back that sets min-width/min-height/width/height to >= 44px. This is a
-  // conservative, regex-based heuristic and intentionally only looks for
+  // declarations in pixels >= 44, or padding that gives an axis >=44px, or a
+  // <style> block rule targeting a.back or .back that sets these properties.
+  // This is a conservative, regex-based heuristic and intentionally only looks for
   // literal px declarations inside the game's file.
   const skip = excludedRanges(html);
   const anchorRe = /<a\b([^>]*)>/gi;
@@ -380,6 +389,44 @@ function checkGameFile(rel, { registration }) {
   // Keep a line number for the first back anchor with class so diagnostics point
   // at a useful location when tappable evidence is missing.
   let firstBackLine = 0;
+
+  function declarationsShowTappable(declText) {
+    const propRe = /([a-zA-Z-]+)\s*:\s*([^;]+)/g;
+    const props = Object.create(null);
+    let p;
+    while ((p = propRe.exec(declText))) {
+      const name = p[1].trim().toLowerCase();
+      const val = p[2].trim();
+      props[name] = val;
+    }
+    for (const key of ["min-width","min-height","width","height"]) {
+      if (props[key]) {
+        const m = props[key].match(/^([0-9]+)px\b/);
+        if (m && Number(m[1]) >= 44) return true;
+      }
+    }
+    // padding shorthand or individual paddings in px
+    function parsePadding(val) {
+      return Array.from(val.matchAll(/([0-9]+)px/g), (mm) => Number(mm[1]));
+    }
+    let top=0,right=0,bottom=0,left=0;
+    if (props['padding']) {
+      const nums = parsePadding(props['padding']);
+      if (nums.length === 1) top = right = bottom = left = nums[0];
+      else if (nums.length === 2) { top = bottom = nums[0]; right = left = nums[1]; }
+      else if (nums.length === 3) { top = nums[0]; right = left = nums[1]; bottom = nums[2]; }
+      else if (nums.length >= 4) { top = nums[0]; right = nums[1]; bottom = nums[2]; left = nums[3]; }
+    }
+    if (props['padding-top']) { const mm = props['padding-top'].match(/^([0-9]+)px\b/); if (mm) top = Number(mm[1]); }
+    if (props['padding-right']) { const mm = props['padding-right'].match(/^([0-9]+)px\b/); if (mm) right = Number(mm[1]); }
+    if (props['padding-bottom']) { const mm = props['padding-bottom'].match(/^([0-9]+)px\b/); if (mm) bottom = Number(mm[1]); }
+    if (props['padding-left']) { const mm = props['padding-left'].match(/^([0-9]+)px\b/); if (mm) left = Number(mm[1]); }
+    const horiz = (left || 0) + (right || 0);
+    const vert = (top || 0) + (bottom || 0);
+    if (horiz >= 44 || vert >= 44) return true;
+    return false;
+  }
+
   while ((m = anchorRe.exec(html))) {
     const idx = m.index;
     if (inRanges(skip, idx)) continue;
@@ -404,19 +451,11 @@ function checkGameFile(rel, { registration }) {
     if (!firstBackLine) firstBackLine = lineOf(html, idx);
 
     // Check inline style attribute for px-based width/height/min-* rules >= 44
+    // or padding that yields at least 44px in one axis.
     const styleMatch = attrs.match(/\bstyle\s*=\s*(['"])([\s\S]*?)\1/i);
     if (styleMatch && styleMatch[2]) {
       const styleText = styleMatch[2];
-      const dimRe = /(?:min-width|min-height|width|height)\s*:\s*([0-9]+)px/gi;
-      let dm;
-      while ((dm = dimRe.exec(styleText))) {
-        const n = Number(dm[1]);
-        if (!Number.isNaN(n) && n >= 44) {
-          sizeEvidence = true;
-          break;
-        }
-      }
-      if (sizeEvidence) break;
+      if (declarationsShowTappable(styleText)) { sizeEvidence = true; break; }
     }
     // If no inline evidence yet, continue to next anchor and we'll scan <style>
     // blocks once after the anchor loop; a later anchor might have inline evidence.
@@ -424,7 +463,8 @@ function checkGameFile(rel, { registration }) {
 
   // If we haven't found inline evidence but we did find at least one back anchor
   // with class="back", search the file's <style> blocks for rules that target
-  // a.back or .back and declare pixel-based dimensions >= 44.
+  // a.back or .back and declare pixel-based dimensions >= 44 or padding that
+  // yields a tappable size.
   if (!sizeEvidence && firstBackLine) {
     const styleBlockRe = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
     let sbm;
@@ -437,15 +477,7 @@ function checkGameFile(rel, { registration }) {
         const selector = rm[1];
         const body = rm[2];
         if (!/\b(a\.back|\.back)\b/i.test(selector)) continue;
-        const dimRe = /(?:min-width|min-height|width|height)\s*:\s*([0-9]+)px/gi;
-        let dm;
-        while ((dm = dimRe.exec(body))) {
-          const n = Number(dm[1]);
-          if (!Number.isNaN(n) && n >= 44) {
-            sizeEvidence = true;
-            break;
-          }
-        }
+        if (declarationsShowTappable(body)) { sizeEvidence = true; break; }
         if (sizeEvidence) break;
       }
       if (sizeEvidence) break;
