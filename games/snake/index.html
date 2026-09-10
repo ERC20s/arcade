@@ -62,8 +62,29 @@ Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Spac
     const ROWS = canvas.height / CELL;  // 20
     const START_STEP = 0.14;            // seconds per move at score 0
     const MIN_STEP = 0.06;              // fastest the snake ever gets
+    const BEST_KEY = 'arcade-snake-best';
 
-    let snake, dir, nextDir, fruit, score, best = 0, paused, over, acc, step;
+    // Read a saved best score if storage is available; private browsing or a
+    // locked-down iframe can throw here, so fall back to an in-memory 0.
+    function loadBest(){
+      try {
+        const saved = parseInt(localStorage.getItem(BEST_KEY), 10);
+        return Number.isFinite(saved) && saved > 0 ? saved : 0;
+      } catch(e){
+        return 0;
+      }
+    }
+
+    function saveBest(v){
+      try {
+        localStorage.setItem(BEST_KEY, String(v));
+      } catch(e){
+        // Storage blocked (e.g. Safari private mode): keep playing with the
+        // in-memory best only.
+      }
+    }
+
+    let snake, dir, nextDir, fruit, score, best = loadBest(), paused, over, acc, step;
 
     function reset(){
       const cx = Math.floor(COLS / 2), cy = Math.floor(ROWS / 2);
@@ -83,7 +104,10 @@ Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Spac
 
     function updateScore(){
       scoreEl.textContent = score;
-      if(score > best) best = score;
+      if(score > best){
+        best = score;
+        saveBest(best);
+      }
       bestEl.textContent = 'best ' + best;
     }
 
