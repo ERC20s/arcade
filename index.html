@@ -83,9 +83,36 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
       color:#666;
       font-size:12px;
     }
+
+    /* Accessibility: an off-screen "Skip to games" link that becomes visible when keyboard-focused */
+    a.skip{
+      position:absolute;
+      left:-9999px;
+      top:auto;
+      width:1px;
+      height:1px;
+      overflow:hidden;
+    }
+    a.skip:focus, a.skip:focus-visible{
+      position:fixed;
+      left:16px;
+      top:16px;
+      width:auto;
+      height:auto;
+      overflow:visible;
+      background:#0db;
+      color:#012;
+      padding:8px 12px;
+      border-radius:6px;
+      text-decoration:none;
+      box-shadow:0 2px 6px rgba(0,0,0,0.6);
+      z-index:1000;
+      outline:3px solid rgba(255,255,255,0.85);
+    }
   </style>
 </head>
 <body>
+  <a class="skip" href="#game-list">Skip to games</a>
   <header>
     <h1>Browser Arcade</h1>
     <p>Small browser games, one folder each, zero dependencies, keyboard and touch.</p>
@@ -97,7 +124,7 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
       per entry as games are merged. The link text must start with the game's
       Title: from its metadata comment — tools/check-arcade.mjs enforces that.
     -->
-    <ul id="game-list">
+    <ul id="game-list" tabindex="-1">
       <li><a class="game" href="games/snake/index.html">Snake — eat, grow, do not bite yourself</a></li>
     </ul>
 
