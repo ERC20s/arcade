@@ -1,0 +1,27 @@
+<!--
+Title: External Resource Demo
+Description: A demo that includes an external image which the checker should reject.
+Controls: Arrow keys or tap to move, P or the Pause button to pause.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>External Resource Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../../index.html">&larr; Arcade</a>
+  <p>Score: <span id="score">0</span></p>
+  <button id="pauseBtn" type="button">Pause</button>
+  <div id="pauseOverlay" hidden>Paused</div>
+  <!-- An external image referenced in live markup should be rejected by the checker -->
+  <img src="https://example.com/remote.png" alt="remote">
+  <script>
+    // game script
+  </script>
+</body>
+</html>

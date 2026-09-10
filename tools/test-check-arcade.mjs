@@ -175,6 +175,12 @@ const CASES = [
     overlay: "missing-viewport",
     exit: 1,
     includes: ["games/demo/index.html", 'missing <meta name="viewport"']
+  },
+  {
+    name: "a game that includes an external https resource is rejected",
+    overlay: "external-resource",
+    exit: 1,
+    includes: ["games/demo/index.html", "external resource"]
   }
 ];
 

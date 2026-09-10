@@ -545,6 +545,29 @@ function checkGameFile(rel, { registration }) {
     }
   }
 
+  // Reject live tags that load external http(s) or protocol-relative resources.
+  // Scan common resource-loading tags and flag src/href/data attributes that
+  // start with http:, https: or //, ignoring commented/script/style ranges.
+  {
+    const externalTags = ["img","script","link","iframe","audio","video","source","embed","object","track"];
+    const tagRe = new RegExp("<\\s*(" + externalTags.join("|") + ")\\b([^>]*)>", "gi");
+    let tm;
+    while ((tm = tagRe.exec(html))) {
+      const idx2 = tm.index;
+      if (inRanges(skip, idx2)) continue;
+      const tag = tm[1].toLowerCase();
+      const attrs = tm[2];
+      const attrRe = /\b(?:src|href|data)\s*=\s*(['"])(.*?)\1/i;
+      const am = attrs.match(attrRe);
+      if (!am) continue;
+      const val = am[2];
+      if (/^\s*(?:https?:|\\/\\/)/i.test(val)) {
+        const line = lineOf(html, idx2);
+        fail(rel, line, `external resource in live markup: <${tag}> uses ${val} — games must be self-contained (use data: URIs or inline the asset)`);
+      }
+    }
+  }
+
   checkFolder(rel);
 
   if (registration) {
