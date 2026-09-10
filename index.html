@@ -187,5 +187,220 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
       });
     })();
   </script>
+
+  <script>
+    // Runtime launcher checker: non-blocking, defensive diagnostics for games listed in #game-list.
+    (function () {
+      var TIMEOUT = 5000; // ms per fetch
+      var CONCURRENCY = 4;
+
+      function fetchWithTimeout(url, timeout) {
+        var controller = new AbortController();
+        var signal = controller.signal;
+        var timer = setTimeout(function () { controller.abort(); }, timeout);
+        return fetch(url, { signal: signal }).finally(function () { clearTimeout(timer); });
+      }
+
+      function parseMetadata(text) {
+        // Look for an HTML comment at the top with Title:, Description:, Controls:
+        // <!--\nTitle: ...\nDescription: ...\nControls: ...\n-->
+        var start = text.indexOf('<!--');
+        var end = text.indexOf('-->');
+        if (start === -1 || end === -1 || start > 200) return null; // not at top
+        var block = text.slice(start + 4, end).trim();
+        var lines = block.split(/\r?\n/).map(function (l) { return l.trim(); });
+        var meta = {};
+        lines.forEach(function (l) {
+          var m = l.match(/^Title:\s*(.*)$/i);
+          if (m) meta.Title = m[1].trim();
+          m = l.match(/^Description:\s*(.*)$/i);
+          if (m) meta.Description = m[1].trim();
+          m = l.match(/^Controls:\s*(.*)$/i);
+          if (m) meta.Controls = m[1].trim();
+        });
+        return Object.keys(meta).length ? meta : null;
+      }
+
+      function checkBackLink(doc) {
+        // Prefer a.back, or any <a href> that points to an index.html in an upper folder
+        if (doc.querySelector('a.back[href]')) return true;
+        var anchors = doc.querySelectorAll('a[href]');
+        for (var i = 0; i < anchors.length; i++) {
+          var href = anchors[i].getAttribute('href') || '';
+          try {
+            var resolved = new URL(href, location.href);
+            if (resolved.pathname && /index\.html$/.test(resolved.pathname) && resolved.origin === location.origin) {
+              // don't count a self-link
+              if (resolved.pathname !== location.pathname) return true;
+            }
+          } catch (e) {
+            // ignore malformed
+          }
+        }
+        return false;
+      }
+
+      function renderBanner(issues) {
+        if (!issues || !issues.length) return;
+        try {
+          var existing = document.getElementById('launcher-checker-banner');
+          if (existing) existing.parentNode.removeChild(existing);
+          var banner = document.createElement('div');
+          banner.id = 'launcher-checker-banner';
+          banner.setAttribute('role', 'region');
+          banner.setAttribute('aria-live', 'polite');
+          banner.style.position = 'fixed';
+          banner.style.left = '12px';
+          banner.style.right = '12px';
+          banner.style.top = '12px';
+          banner.style.zIndex = 2000;
+          banner.style.background = '#fffb';
+          banner.style.backdropFilter = 'blur(4px)';
+          banner.style.color = '#000';
+          banner.style.border = '1px solid #ccc';
+          banner.style.padding = '10px 12px';
+          banner.style.borderRadius = '8px';
+          banner.style.boxShadow = '0 4px 18px rgba(0,0,0,0.6)';
+
+          var title = document.createElement('div');
+          title.textContent = 'Launcher diagnostics: ' + issues.length + ' issue(s) found — see console for details.';
+          banner.appendChild(title);
+
+          var list = document.createElement('ul');
+          list.style.margin = '8px 0 0';
+          list.style.padding = '0 0 0 18px';
+          list.style.maxHeight = '200px';
+          list.style.overflow = 'auto';
+          issues.slice(0, 10).forEach(function (it) {
+            var li = document.createElement('li');
+            li.textContent = it.short;
+            list.appendChild(li);
+          });
+          banner.appendChild(list);
+
+          var close = document.createElement('button');
+          close.textContent = 'Dismiss';
+          close.style.marginLeft = '12px';
+          close.addEventListener('click', function () { banner.parentNode.removeChild(banner); });
+          banner.appendChild(close);
+
+          document.body.appendChild(banner);
+        } catch (e) {
+          // rendering failure is non-fatal
+          console.warn('launcher-checker: failed to show banner', e);
+        }
+      }
+
+      function limitConcurrent(tasks, limit) {
+        var i = 0;
+        var results = [];
+        return new Promise(function (resolve) {
+          var active = 0;
+          function next() {
+            if (i === tasks.length && active === 0) return resolve(results);
+            while (active < limit && i < tasks.length) {
+              (function (idx) {
+                active++;
+                tasks[idx]().then(function (r) { results[idx] = r; }).catch(function (e) { results[idx] = { error: e }; }).finally(function () { active--; next(); });
+              })(i);
+              i++;
+            }
+          }
+          next();
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        try {
+          var anchors = Array.prototype.slice.call(document.querySelectorAll('#game-list a.game[href]'))
+            .filter(function (a) { return (a.getAttribute('href') || '').trim() !== ''; });
+
+          if (!anchors.length) return;
+
+          var tasks = anchors.map(function (a) {
+            return function () {
+              return new Promise(function (resolve) {
+                var href = a.getAttribute('href');
+                var url;
+                try { url = new URL(href, location.href); } catch (e) { resolve({ anchor: a, error: 'bad-url' }); return; }
+                if (url.origin !== location.origin) {
+                  // skip external targets
+                  resolve({ anchor: a, skipped: 'external' });
+                  return;
+                }
+
+                fetchWithTimeout(url.href, TIMEOUT).then(function (resp) {
+                  if (!resp.ok) {
+                    resolve({ anchor: a, error: 'http:' + resp.status });
+                    return;
+                  }
+                  return resp.text().then(function (text) {
+                    var meta = parseMetadata(text);
+                    var doc = null;
+                    try { doc = new DOMParser().parseFromString(text, 'text/html'); } catch (e) { /* ignore */ }
+                    var problems = [];
+
+                    if (!meta || !meta.Title || !meta.Description) {
+                      problems.push('missing-metadata');
+                    } else {
+                      var expectedStart = meta.Title + ' — ' + meta.Description;
+                      var label = (a.textContent || '').trim();
+                      if (label.indexOf(expectedStart) !== 0) {
+                        problems.push('label-mismatch: expected "' + expectedStart + '"');
+                      }
+                    }
+
+                    var hasBack = doc ? checkBackLink(doc) : false;
+                    if (!hasBack) problems.push('missing-back-link');
+
+                    resolve({ anchor: a, meta: meta, problems: problems });
+                  });
+                }).catch(function (err) {
+                  if (err && err.name === 'AbortError') {
+                    resolve({ anchor: a, error: 'timeout' });
+                  } else {
+                    resolve({ anchor: a, error: 'fetch-error' });
+                  }
+                });
+              });
+            };
+          });
+
+          limitConcurrent(tasks, CONCURRENCY).then(function (results) {
+            var issues = [];
+            results.forEach(function (res) {
+              if (!res) return;
+              var a = res.anchor;
+              var href = a && a.getAttribute && a.getAttribute('href');
+              if (res.skipped === 'external') return; // intentional external link
+              if (res.error) {
+                issues.push({ short: href + ': ' + res.error, detail: res });
+                return;
+              }
+              if (res.problems && res.problems.length) {
+                issues.push({ short: href + ': ' + res.problems.join(', '), detail: res });
+                return;
+              }
+            });
+
+            if (issues.length) {
+              console.group('launcher-checker: problems found (' + issues.length + ')');
+              issues.forEach(function (it) { console.warn(it.short, it.detail); });
+              console.groupEnd();
+              renderBanner(issues);
+            } else {
+              console.info('launcher-checker: no problems found');
+            }
+          }).catch(function (e) {
+            console.warn('launcher-checker: unexpected failure', e);
+          });
+
+        } catch (e) {
+          console.warn('launcher-checker: failed to start', e);
+        }
+      });
+
+    })();
+  </script>
 </body>
 </html>
