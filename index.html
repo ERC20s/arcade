@@ -184,6 +184,28 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
           }
         });
 
+        // Accessibility: when the "Skip to games" link is activated, move keyboard focus
+        // into the game list so subsequent Tab lands on the first game link.
+        (function () {
+          var skip = document.querySelector('a.skip[href="#game-list"]') || document.querySelector('a.skip');
+          var list = document.getElementById('game-list');
+          if (!skip || !list) return;
+
+          skip.addEventListener('click', function (e) {
+            try { e.preventDefault(); } catch (err) { /* ignore */ }
+            try {
+              // Try to focus without causing a scroll jump in supporting browsers.
+              if (typeof list.focus === 'function') {
+                try { list.focus({ preventScroll: true }); } catch (e) { list.focus(); }
+              }
+            } catch (err) {
+              // best-effort: ignore failures
+            }
+            // Update the hash so the URL reflects the navigation (keeps history behaviour).
+            try { location.hash = '#game-list'; } catch (err) { /* ignore */ }
+          });
+        })();
+
       });
     })();
   </script>
