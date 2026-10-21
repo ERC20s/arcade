@@ -18,6 +18,7 @@
  *     - the <ul id="game-list"> block exists
  *     - every listed link carries class="game", has a unique href, and points
  *       at a file that actually exists on disk
+ *     - every listed link's label is the game's own "Title — Description"
  *   Every game (games/<name>/index.html) and the shared template
  *   (template/game-template/index.html)
  *     - the file opens with the metadata comment carrying Title:, Description:
@@ -26,7 +27,9 @@
  *     - it holds the back link <a class="back" href="../../index.html">
  *     - it shows a score (id="score" or the text "Score:") and a pause
  *       affordance (id="pauseBtn", id="pauseOverlay" or the text "Paused")
- *     - the folder holds no .js, .css or package.json file
+ *     - the folder (and any folder inside it) holds no .js, .css or .html
+ *       source file besides index.html, and no package.json
+ *     - it loads no script and no stylesheet other than the shared module
  *     - it loads the shared module with a live
  *       <script src="../../common/arcade.js"> (no defer, async or
  *       type="module") ahead of any inline script that uses Arcade, and its
@@ -228,7 +231,12 @@ function checkCommonModule(rel, html) {
     const attrs = attributes(m[1]);
     const type = (attrs.get("type") || "").trim().toLowerCase();
     if (attrs.has("src")) {
-      if (attrs.get("src").trim() !== COMMON_SRC || loaded) continue;
+      const src = attrs.get("src").trim();
+      if (src !== COMMON_SRC) {
+        fail(rel, lineOf(html, idx), `loads a separate script "${src}": a game is one self-contained index.html, and the only script it may load is the shared module ${COMMON_SRC}`);
+        continue;
+      }
+      if (loaded) continue;
       if (type === "module") late ||= 'type="module"';
       else if (!CLASSIC_SCRIPT_TYPES.has(type)) late ||= `type="${type}"`;
       else {
@@ -241,6 +249,17 @@ function checkCommonModule(rel, html) {
       // A module script runs after every classic one, so only a classic one can be early.
       if (!loaded && !earlyLine && type !== "module" && /\bArcade\./.test(own)) earlyLine = lineOf(html, idx);
       code += own + "\n";
+    }
+  }
+  // A stylesheet of its own is a separate source file too.
+  const linkRe = /<link\b([^>]*)>/gi;
+  while ((m = linkRe.exec(html))) {
+    if (inRanges(comments, m.index)) continue;
+    if (blocks.some(([start, end]) => m.index > start && m.index < end)) continue;
+    const attrs = attributes(m[1]);
+    const rel_ = (attrs.get("rel") || "").toLowerCase().split(/\s+/);
+    if (rel_.includes("stylesheet")) {
+      fail(rel, lineOf(html, m.index), `loads a separate stylesheet "${attrs.get("href") || ""}": a game's CSS must be inline in its one index.html`);
     }
   }
   if (!loaded) {
@@ -347,7 +366,9 @@ function checkMetadata(rel, html) {
   const block = head.slice(0, end);
   const fields = {};
   for (const label of ["Title", "Description", "Controls"]) {
-    const m = block.match(new RegExp("^\\s*" + label + ":\\s*(\\S.*?)\\s*$", "m"));
+    // Only horizontal whitespace may follow the label: with \s* an empty
+    // "Title:" line would swallow the next line ("Description: ...") as its value.
+    const m = block.match(new RegExp("^[ \\t]*" + label + ":[ \\t]*(\\S.*?)[ \\t\\r]*$", "m"));
     if (!m) fail(rel, 1, `metadata comment is missing a non-empty "${label}:" field`);
     else fields[label] = m[1];
   }
@@ -361,24 +382,34 @@ function checkMetadata(rel, html) {
   return fields;
 }
 
+// The game folder, including every folder inside it, holds no source file but
+// index.html: no script, no stylesheet, no second page, no package.json. Small
+// static assets (an image, a sound) are fine anywhere in it.
 function checkFolder(rel) {
-  const dir = path.dirname(abs(rel));
-  let names = [];
-  try {
-    names = readdirSync(dir);
-  } catch {
-    return;
-  }
-  for (const name of names) {
-    const full = path.join(dir, name);
-    let isDir = false;
-    try { isDir = statSync(full).isDirectory(); } catch { isDir = false; }
-    if (isDir) continue;
-    if (name === "package.json" || /\.(js|mjs|cjs|css)$/i.test(name)) {
-      fail(`${path.posix.dirname(rel)}/${name}`, 0,
-        "no separate source files in a game folder: the game must be one self-contained index.html");
+  const gameDir = path.posix.dirname(rel);
+  const walk = (relDir) => {
+    let names = [];
+    try {
+      names = readdirSync(abs(relDir));
+    } catch {
+      return;
     }
-  }
+    for (const name of names.sort()) {
+      const childRel = `${relDir}/${name}`;
+      let isDir = false;
+      try { isDir = statSync(abs(childRel)).isDirectory(); } catch { isDir = false; }
+      if (isDir) {
+        walk(childRel);
+        continue;
+      }
+      if (childRel === rel) continue;
+      if (name === "package.json" || /\.(js|mjs|cjs|css|html?)$/i.test(name)) {
+        fail(childRel, 0,
+          "no separate source files in a game folder: the game must be one self-contained index.html");
+      }
+    }
+  };
+  walk(gameDir);
 }
 
 function checkGameFile(rel, { registration }) {
@@ -754,6 +785,11 @@ function checkGameFile(rel, { registration }) {
         }
         if (desc.length > MAX_DESCRIPTION) {
           fail(LAUNCHER, line, `launcher link description is ${desc.length} characters; the limit is ${MAX_DESCRIPTION}`);
+        } else if (fields.Description && desc !== fields.Description.replace(/\s+/g, " ")) {
+          // CONTRIBUTING.md: the label is the game's own Title and Description. The
+          // launcher's in-page checker holds visitors to the same rule, so a label
+          // that drifts from the header shows every player a diagnostics banner.
+          fail(LAUNCHER, line, `launcher link description "${desc}" does not match the game's Description "${fields.Description}" (${rel}): the label must be "Title — Description" from the metadata header`);
         }
       }
     }

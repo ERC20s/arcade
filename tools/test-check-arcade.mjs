@@ -324,6 +324,66 @@ const CASES = [
     mutate(root) {
       replaceIn(root, DEMO, COMMON_TAG, '<script type="text/javascript" src=../../common/arcade.js></script>');
     }
+  },
+  {
+    name: "a launcher label whose description is not the game's Description is rejected",
+    overlay: "launcher-description-mismatch",
+    exit: 1,
+    includes: ["index.html", "does not match the game's Description", '"fixture game"', "games/demo/index.html"],
+    excludes: ["does not start with the game's Title"]
+  },
+  {
+    name: "a source file hidden in a sub-folder of the game folder is rejected",
+    overlay: "stray-source-in-subfolder",
+    exit: 1,
+    includes: ["games/demo/lib/engine.js", "no separate source files in a game folder"]
+  },
+  {
+    name: "a second HTML page in the game folder is rejected, while index.html itself is not",
+    overlay: "stray-html-in-game-folder",
+    exit: 1,
+    includes: ["games/demo/level2.html", "no separate source files in a game folder"],
+    excludes: ["games/demo/index.html"]
+  },
+  {
+    name: "a <script src> other than the shared module is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html", 'loads a separate script "lib/engine.js"'],
+    excludes: ["does not load the shared module", "uses Arcade before the shared module"],
+    mutate(root) {
+      replaceIn(root, DEMO, COMMON_TAG, `<script src="lib/engine.js"></script>\n  ${COMMON_TAG}`);
+    }
+  },
+  {
+    name: "a <link rel=\"stylesheet\"> is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html", 'loads a separate stylesheet "theme.css"'],
+    mutate(root) {
+      replaceIn(root, DEMO, "<style>", '<link rel="stylesheet" href="theme.css">\n  <style>');
+    }
+  },
+  {
+    name: "an empty Title: line is a missing Title, not the next line's text",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html", 'missing a non-empty "Title:" field'],
+    excludes: ["does not start with the game's Title", "Description: Fixture game"],
+    mutate(root) {
+      replaceIn(root, DEMO, "Title: Demo\n", "Title:\n");
+    }
+  },
+  {
+    name: "a game file with Windows line endings is accepted",
+    overlay: null,
+    exit: 0,
+    includes: ["arcade check passed"],
+    excludes: ["metadata comment is missing"],
+    mutate(root) {
+      const file = path.join(root, "games", "demo", "index.html");
+      writeFileSync(file, readFileSync(file, "utf8").replace(/\r?\n/g, "\r\n"), "utf8");
+    }
   }
 ];
 
