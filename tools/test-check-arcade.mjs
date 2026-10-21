@@ -69,6 +69,7 @@ function replaceIn(root, rel, from, to) {
 }
 
 const DEMO = "games/demo/index.html";
+const LAUNCHER = "index.html";
 const COMMON_TAG = '<script src="../../common/arcade.js"></script>';
 
 /* -------------------------------------------------------------------- cases */
@@ -383,6 +384,72 @@ const CASES = [
     mutate(root) {
       const file = path.join(root, "games", "demo", "index.html");
       writeFileSync(file, readFileSync(file, "utf8").replace(/\r?\n/g, "\r\n"), "utf8");
+    }
+  },
+  {
+    name: "a launcher label wrapped onto a second line is rejected (the in-page check sees the line break)",
+    overlay: null,
+    exit: 1,
+    includes: ["index.html:", "is not exactly", 'for the checker\\n      self-test;', "games/demo/index.html"],
+    excludes: ["does not match the game's Description", "does not start with the game's Title"],
+    mutate(root) {
+      replaceIn(root, LAUNCHER, "Fixture game for the checker self-test;", "Fixture game for the checker\n      self-test;");
+    }
+  },
+  {
+    name: "a launcher label whose Title differs only in case is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["index.html:", "is not exactly", '"demo — Fixture game', '"Demo — Fixture game'],
+    mutate(root) {
+      replaceIn(root, LAUNCHER, ">Demo — Fixture", ">demo — Fixture");
+    }
+  },
+  {
+    name: "a launcher label that only matches the Description after collapsing its spaces is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["index.html:", "is not exactly", '"Demo — Fixture  game for'],
+    mutate(root) {
+      replaceIn(root, DEMO, "Description: Fixture game for", "Description: Fixture  game for");
+    }
+  },
+  {
+    name: "a stylesheet pulled in with @import is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html:12", 'loads a separate stylesheet "../../shared/theme.css" with @import'],
+    mutate(root) {
+      replaceIn(root, DEMO, "<style>", '<style>\n    @import "../../shared/theme.css";');
+    }
+  },
+  {
+    name: "a script pulled in by a module import statement is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html", 'imports a separate script "../../shared/engine.mjs"'],
+    mutate(root) {
+      replaceIn(root, DEMO, "</body>", '<script type="module">import { start } from "../../shared/engine.mjs"; start();</script>\n</body>');
+    }
+  },
+  {
+    name: "a script pulled in by import() from a classic script is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html", 'imports a separate script "../../shared/engine.mjs"'],
+    mutate(root) {
+      replaceIn(root, DEMO, "</body>", '<script>import("../../shared/engine.mjs").then(function (m) { m.start(); });</script>\n</body>');
+    }
+  },
+  {
+    name: "an @import or import inside a CSS or JavaScript comment does not count",
+    overlay: null,
+    exit: 0,
+    includes: ["arcade check passed"],
+    excludes: ["@import", "imports a separate script"],
+    mutate(root) {
+      replaceIn(root, DEMO, "<style>", '<style>\n    /* @import "../../shared/theme.css"; */');
+      replaceIn(root, DEMO, 'Arcade.highScore("demo");', '// import { start } from "../../shared/engine.mjs";\n    /* import("../../shared/engine.mjs"); */\n    Arcade.highScore("demo");');
     }
   }
 ];

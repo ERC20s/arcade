@@ -18,7 +18,8 @@
  *     - the <ul id="game-list"> block exists
  *     - every listed link carries class="game", has a unique href, and points
  *       at a file that actually exists on disk
- *     - every listed link's label is the game's own "Title — Description"
+ *     - every listed link's label is exactly the game's own "Title — Description"
+ *       (same case, one line, single spaces), as the in-page checker compares it
  *   Every game (games/<name>/index.html) and the shared template
  *   (template/game-template/index.html)
  *     - the file opens with the metadata comment carrying Title:, Description:
@@ -29,7 +30,8 @@
  *       affordance (id="pauseBtn", id="pauseOverlay" or the text "Paused")
  *     - the folder (and any folder inside it) holds no .js, .css or .html
  *       source file besides index.html, and no package.json
- *     - it loads no script and no stylesheet other than the shared module
+ *     - it loads no script and no stylesheet other than the shared module (no
+ *       other <script src>, stylesheet <link>, @import, import or import())
  *     - it loads the shared module with a live
  *       <script src="../../common/arcade.js"> (no defer, async or
  *       type="module") ahead of any inline script that uses Arcade, and its
@@ -42,7 +44,7 @@
  * <style> blocks, so a string in the game's JavaScript or a rule in its CSS
  * never stands in for markup the player can actually see.
  *   Every game, additionally
- *     - it is listed in the launcher and the link text starts with its Title
+ *     - it is listed in the launcher and the link text is its Title — Description
  *
  * Every problem prints one line as `path:line: message`; a clean run prints a
  * short summary. The exit code is 0 when clean, 1 when anything failed and 2
@@ -170,12 +172,16 @@ const ENTITIES = {
   "&larr;": "←", "&rarr;": "→"
 };
 
-function text(html) {
+// What a browser's textContent gives for a chunk of markup: tags dropped and
+// entities decoded, whitespace (line breaks included) kept as written.
+function textContent(html) {
   return html
     .replace(/<[^>]*>/g, "")
-    .replace(/&[a-z#0-9]+;/gi, (e) => (e in ENTITIES ? ENTITIES[e] : e))
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/&[a-z#0-9]+;/gi, (e) => (e in ENTITIES ? ENTITIES[e] : e));
+}
+
+function text(html) {
+  return textContent(html).replace(/\s+/g, " ").trim();
 }
 
 /* ------------------------------------------------------------- shared module */
@@ -204,6 +210,12 @@ function attributes(attrText) {
 // <script type> values a browser runs as a classic script; anything else but
 // "module" is a data block it never runs.
 const CLASSIC_SCRIPT_TYPES = new Set(["", "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript"]);
+
+// A script or stylesheet pulled in from inside inline code rather than by a tag:
+// import "x" / import { a } from "x" / import("x") in JavaScript, and
+// @import "x" / @import url(x) in CSS. Group 2 is the specifier.
+const JS_IMPORT_RE = /(?<![\w$.])import\b\s*(?:\(\s*|[\w$*{][^;'"`]*?\bfrom\s*)?(["'`])([^"'`\n]*)\1/;
+const CSS_IMPORT_RE = /@import\s*(?:url\(\s*)?(["']?)([^"')\s;]+)\1/i;
 
 function stripJsComments(code) {
   return code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'\\])\/\/.*$/gm, "$1");
@@ -246,6 +258,10 @@ function checkCommonModule(rel, html) {
       }
     } else if (CLASSIC_SCRIPT_TYPES.has(type) || type === "module") {
       const own = stripJsComments(m[2]);
+      const imported = own.match(JS_IMPORT_RE);
+      if (imported) {
+        fail(rel, lineOf(html, idx), `imports a separate script "${imported[2]}": a game is one self-contained index.html, and the only script it may load is the shared module ${COMMON_SRC}`);
+      }
       // A module script runs after every classic one, so only a classic one can be early.
       if (!loaded && !earlyLine && type !== "module" && /\bArcade\./.test(own)) earlyLine = lineOf(html, idx);
       code += own + "\n";
@@ -260,6 +276,16 @@ function checkCommonModule(rel, html) {
     const rel_ = (attrs.get("rel") || "").toLowerCase().split(/\s+/);
     if (rel_.includes("stylesheet")) {
       fail(rel, lineOf(html, m.index), `loads a separate stylesheet "${attrs.get("href") || ""}": a game's CSS must be inline in its one index.html`);
+    }
+  }
+  // So is one pulled in by an @import inside a live <style> block.
+  const styleRe = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
+  while ((m = styleRe.exec(html))) {
+    if (inRanges(comments, m.index)) continue;
+    if (blocks.some(([start, end]) => m.index > start && m.index < end)) continue;
+    const imported = m[1].replace(/\/\*[\s\S]*?\*\//g, "").match(CSS_IMPORT_RE);
+    if (imported) {
+      fail(rel, lineOf(html, m.index), `loads a separate stylesheet "${imported[2]}" with @import: a game's CSS must be inline in its one index.html`);
     }
   }
   if (!loaded) {
@@ -310,6 +336,8 @@ function readLauncher() {
     entries.push({
       href,
       label: text(m[2]),
+      // a.textContent.trim(), which is what the launcher's in-page checker compares
+      rawLabel: textContent(m[2]).trim(),
       hasGameClass,
       line: lineOf(html, blockStart + m.index)
     });
@@ -780,8 +808,10 @@ function checkGameFile(rel, { registration }) {
       } else {
         const head = dashMatch[1];
         const desc = dashMatch[2];
+        let labelOk = true;
         if (head.toLowerCase() !== fields.Title.toLowerCase()) {
           fail(LAUNCHER, line, `launcher link text "${label}" does not start with the game's Title "${fields.Title}" (${rel})`);
+          labelOk = false;
         }
         if (desc.length > MAX_DESCRIPTION) {
           fail(LAUNCHER, line, `launcher link description is ${desc.length} characters; the limit is ${MAX_DESCRIPTION}`);
@@ -790,6 +820,14 @@ function checkGameFile(rel, { registration }) {
           // launcher's in-page checker holds visitors to the same rule, so a label
           // that drifts from the header shows every player a diagnostics banner.
           fail(LAUNCHER, line, `launcher link description "${desc}" does not match the game's Description "${fields.Description}" (${rel}): the label must be "Title — Description" from the metadata header`);
+        } else if (labelOk && fields.Description) {
+          // The in-page checker compares a.textContent.trim() with Title + " — " +
+          // Description as written: no case folding and no whitespace collapsing,
+          // so a label that only matches loosely still shows visitors the banner.
+          const expected = `${fields.Title} — ${fields.Description}`;
+          if (entry.rawLabel !== expected) {
+            fail(LAUNCHER, line, `launcher link label ${JSON.stringify(entry.rawLabel)} is not exactly ${JSON.stringify(expected)} (${rel}): the launcher's in-page check compares case, spaces and line breaks too, so write the label on one line exactly as the metadata header has it`);
+          }
         }
       }
     }
