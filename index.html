@@ -121,15 +121,16 @@ Controls: Tab/Enter to navigate and open a game link (keyboard-accessible); tap 
   <main>
     <!--
       Game list: add one <li><a class="game" href="games/<name>/index.html">Title — one-line description</a></li>
-      per entry as games are merged. The link text must start with the game's
-      Title: from its metadata comment — tools/check-arcade.mjs enforces that.
+      per entry as games are merged. The link text must be the game's
+      Title: and Description: from its metadata comment, joined by " — ";
+      tools/check-arcade.mjs enforces that.
     -->
     <div class="launcher-controls">
       <button id="random-game" type="button" aria-label="Play a random game">Play a random game</button>
     </div>
     <ul id="game-list" tabindex="-1">
-      <li><a class="game" href="games/snake/index.html">Snake — eat, grow, do not bite yourself</a></li>
-      <li><a class="game" href="games/breakout/index.html">Breakout — bounce the ball, smash every brick</a></li>
+      <li><a class="game" href="games/snake/index.html">Snake — Classic grid snake: eat the fruit, grow longer, do not hit yourself or the walls.</a></li>
+      <li><a class="game" href="games/breakout/index.html">Breakout — Bounce the ball off your paddle to smash every brick; clear the wall to face a faster ball.</a></li>
     </ul>
 
     <section class="how-to">
