@@ -24,7 +24,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { appendFileSync, cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,6 +58,18 @@ function compose(overlay) {
   }
   return root;
 }
+
+// Swap one exact snippet in a composed fixture file; throws if the snippet is
+// gone, so a change to clean/ cannot silently turn a case into a no-op.
+function replaceIn(root, rel, from, to) {
+  const file = path.join(root, ...rel.split("/"));
+  const before = readFileSync(file, "utf8");
+  assert.ok(before.includes(from), `${rel} no longer contains ${JSON.stringify(from)}`);
+  writeFileSync(file, before.replace(from, to), "utf8");
+}
+
+const DEMO = "games/demo/index.html";
+const COMMON_TAG = '<script src="../../common/arcade.js"></script>';
 
 /* -------------------------------------------------------------------- cases */
 
@@ -245,6 +257,72 @@ const CASES = [
     excludes: ["does not load the shared module"],
     mutate(root) {
       rmSync(path.join(root, "common", "arcade.js"));
+    }
+  },
+  {
+    name: "a common/arcade.js <script> after the inline script that calls Arcade is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html", "uses Arcade before the shared module has loaded"],
+    excludes: ["template/game-template/index.html"],
+    mutate(root) {
+      replaceIn(root, DEMO, `  ${COMMON_TAG}\n`, "");
+      replaceIn(root, DEMO, "</body>", `  ${COMMON_TAG}\n</body>`);
+    }
+  },
+  {
+    name: "a deferred common/arcade.js <script> is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html", "loads the shared module with defer"],
+    mutate(root) {
+      replaceIn(root, DEMO, COMMON_TAG, '<script src="../../common/arcade.js" defer></script>');
+    }
+  },
+  {
+    name: "an async common/arcade.js <script> is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html", "loads the shared module with async"],
+    mutate(root) {
+      replaceIn(root, DEMO, COMMON_TAG, '<script async src="../../common/arcade.js"></script>');
+    }
+  },
+  {
+    name: "common/arcade.js loaded as type=\"module\" is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html", 'loads the shared module with type="module"'],
+    mutate(root) {
+      replaceIn(root, DEMO, COMMON_TAG, '<script type="module" src="../../common/arcade.js"></script>');
+    }
+  },
+  {
+    name: "a data-src attribute does not count as loading common/arcade.js",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html", "does not load the shared module"],
+    mutate(root) {
+      replaceIn(root, DEMO, COMMON_TAG, '<script data-src="../../common/arcade.js"></script>');
+    }
+  },
+  {
+    name: "Arcade calls inside a non-JavaScript <script type> do not count",
+    overlay: null,
+    exit: 1,
+    includes: ["games/demo/index.html", "never calls Arcade.highScore", "never calls Arcade.soundButton"],
+    mutate(root) {
+      replaceIn(root, DEMO, `${COMMON_TAG}\n  <script>`, `${COMMON_TAG}\n  <script type="text/plain">`);
+    }
+  },
+  {
+    name: "an unquoted src and an explicit JavaScript type still load common/arcade.js",
+    overlay: null,
+    exit: 0,
+    includes: ["arcade check passed"],
+    excludes: ["shared module"],
+    mutate(root) {
+      replaceIn(root, DEMO, COMMON_TAG, '<script type="text/javascript" src=../../common/arcade.js></script>');
     }
   }
 ];

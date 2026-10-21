@@ -4,7 +4,7 @@ Follow these minimal rules so games work with the shared launcher and stay easy 
 Folder layout
 - Put each game in its own folder under games/, with the entry file at games/<name>/index.html.
 - No build step or external dependencies: the game must be a single HTML file with inline CSS and JS. Small static assets (an image, a sound) may sit in the same folder, but there are no separate .js/.css source files, no package.json, no bundler and no CDN runtime.
-- The one exception is the arcade's own shared module, common/arcade.js, which every game loads by relative path before its own inline script:
+- The one exception is the arcade's own shared module, common/arcade.js, which every game loads by relative path, as a plain script (no defer, async or type="module"), before its own inline script:
   <script src="../../common/arcade.js"></script>
   It keeps the best score in localStorage (Arcade.highScore('<name>')), provides the arcade-wide sound toggle (Arcade.soundButton(button), Arcade.sound.toggle(), Arcade.sound.beep(freq, ms)) and sizes the canvas for the screen (Arcade.fitCanvas). Every game must call Arcade.highScore and Arcade.soundButton.
 
