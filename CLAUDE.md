@@ -10,6 +10,7 @@ npm ci            # install (no runtime deps; the lockfile exists so CI can use 
 npm run arcade    # serve the repo root at http://localhost:5002/ (npx --yes serve -l 5002 .)
 npm run check     # node tools/check-arcade.mjs        — rules every game/template/launcher must meet
 npm test          # node tools/test-check-arcade.mjs   — the checker's self-test against tools/fixtures/
+                  # then node tools/test-games.mjs     — runtime tests of common/arcade.js and game code (node:vm)
 ```
 
 CI (`.github/workflows/ci.yml`) runs `npm ci`, `npm run check` and `npm test` on every push and pull request.

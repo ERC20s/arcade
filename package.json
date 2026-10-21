@@ -6,6 +6,6 @@
   "scripts": {
     "arcade": "npx --yes serve -l 5002 .",
     "check": "node tools/check-arcade.mjs",
-    "test": "node tools/test-check-arcade.mjs"
+    "test": "node tools/test-check-arcade.mjs && node tools/test-games.mjs"
   }
 }

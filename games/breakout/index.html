@@ -242,9 +242,14 @@ Controls: Arrow keys or A/D to move the paddle, Space or Enter to launch (and re
         if(!b.alive) continue;
         if(ball.x + R < b.x || ball.x - R > b.x + BW || ball.y + R < b.y || ball.y - R > b.y + BH) continue;
         b.alive = false;
-        // Came in from the side if it was beside the brick a moment ago, else top/bottom.
-        if(ox < b.x || ox > b.x + BW) ball.vx = -ball.vx;
-        else ball.vy = -ball.vy;
+        // Came in from the side only if the whole ball was beside the brick (and level
+        // with it) a moment ago, else top/bottom; either way it leaves away from the
+        // brick. Judging by the centre alone sent a ball that came up into the gap
+        // between two bricks on through the whole wall.
+        const beside = ox + R < b.x || ox - R > b.x + BW;
+        const level = oy + R >= b.y && oy - R <= b.y + BH;
+        if(beside && level) ball.vx = ox < b.x ? -Math.abs(ball.vx) : Math.abs(ball.vx);
+        else ball.vy = oy < b.y + BH / 2 ? -Math.abs(ball.vy) : Math.abs(ball.vy);
         score += 10 * (ROWS - b.row);
         updateHud();
         Arcade.sound.beep(660 + 60 * (ROWS - b.row), 40);

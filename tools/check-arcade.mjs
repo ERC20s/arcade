@@ -28,8 +28,10 @@
  *       affordance (id="pauseBtn", id="pauseOverlay" or the text "Paused")
  *     - the folder holds no .js, .css or package.json file
  *     - it loads the shared module with a live
- *       <script src="../../common/arcade.js"> and its own inline script calls
- *       Arcade.highScore( and Arcade.soundButton( (comments do not count)
+ *       <script src="../../common/arcade.js"> (no defer, async or
+ *       type="module") ahead of any inline script that uses Arcade, and its
+ *       own inline script calls Arcade.highScore( and Arcade.soundButton(
+ *       (comments and non-JavaScript <script type> blocks do not count)
  *   Shared module
  *     - common/arcade.js exists
  *
@@ -183,33 +185,75 @@ function checkCommonExists() {
   return true;
 }
 
+// The attributes of a start tag as name -> value ("" for a bare attribute such
+// as defer), quoted or not. Names are whole words, so data-src is not src.
+function attributes(attrText) {
+  const attrs = new Map();
+  const re = /([^\s"'=<>\/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+  let m;
+  while ((m = re.exec(attrText))) {
+    const name = m[1].toLowerCase();
+    if (!attrs.has(name)) attrs.set(name, m[2] ?? m[3] ?? m[4] ?? "");
+  }
+  return attrs;
+}
+
+// <script type> values a browser runs as a classic script; anything else but
+// "module" is a data block it never runs.
+const CLASSIC_SCRIPT_TYPES = new Set(["", "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript"]);
+
+function stripJsComments(code) {
+  return code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'\\])\/\/.*$/gm, "$1");
+}
+
 // A game must load common/arcade.js from a live <script src> tag (not one in an
-// HTML comment, nor the text "<script" inside another script's code) and use
-// its high-score store and sound toggle from its own inline JavaScript. JS
-// comments are stripped first, so a commented-out call does not count.
+// HTML comment, nor the text "<script" inside another script's code) that runs
+// before any inline script using Arcade (so no defer, async or type="module",
+// and placed ahead of that script), and use its high-score store and sound
+// toggle from its own inline JavaScript. JS comments are stripped first, so a
+// commented-out call does not count.
 function checkCommonModule(rel, html) {
   const comments = commentRanges(html);
   const blocks = scriptStyleRanges(html);
   const tagRe = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
   let loaded = false;
+  let late = "";       // why a common/arcade.js tag that was found runs too late
+  let earlyLine = 0;   // an inline script that uses Arcade before it has loaded
   let code = "";
   let m;
   while ((m = tagRe.exec(html))) {
     const idx = m.index;
     if (inRanges(comments, idx)) continue;
     if (blocks.some(([start, end]) => idx > start && idx < end)) continue;
-    const src = m[1].match(/\bsrc\s*=\s*(['"])(.*?)\1/i);
-    if (src) {
-      if (src[2] === COMMON_SRC) loaded = true;
-    } else {
-      code += m[2] + "\n";
+    const attrs = attributes(m[1]);
+    const type = (attrs.get("type") || "").trim().toLowerCase();
+    if (attrs.has("src")) {
+      if (attrs.get("src").trim() !== COMMON_SRC || loaded) continue;
+      if (type === "module") late ||= 'type="module"';
+      else if (!CLASSIC_SCRIPT_TYPES.has(type)) late ||= `type="${type}"`;
+      else {
+        const deferred = ["defer", "async", "nomodule"].find((a) => attrs.has(a));
+        if (deferred) late ||= deferred;
+        else loaded = true;
+      }
+    } else if (CLASSIC_SCRIPT_TYPES.has(type) || type === "module") {
+      const own = stripJsComments(m[2]);
+      // A module script runs after every classic one, so only a classic one can be early.
+      if (!loaded && !earlyLine && type !== "module" && /\bArcade\./.test(own)) earlyLine = lineOf(html, idx);
+      code += own + "\n";
     }
   }
   if (!loaded) {
-    fail(rel, 0, `does not load the shared module: add <script src="${COMMON_SRC}"></script> before the game's own <script>`);
+    if (late) {
+      fail(rel, 0, `loads the shared module with ${late}, so it does not run before the game's own script: use a plain <script src="${COMMON_SRC}"></script>`);
+    } else {
+      fail(rel, 0, `does not load the shared module: add <script src="${COMMON_SRC}"></script> before the game's own <script>`);
+    }
     return;
   }
-  code = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'\\])\/\/.*$/gm, "$1");
+  if (earlyLine) {
+    fail(rel, earlyLine, `this <script> uses Arcade before the shared module has loaded: move <script src="${COMMON_SRC}"></script> above it`);
+  }
   if (!/\bArcade\.highScore\s*\(/.test(code)) {
     fail(rel, 0, "loads the shared module but never calls Arcade.highScore(...): keep the best score in the shared high-score store");
   }
