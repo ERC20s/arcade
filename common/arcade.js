@@ -59,6 +59,7 @@
     soundOn = !!on;
     save(SOUND_KEY, soundOn ? 'on' : 'off');
     for (const b of buttons) paint(b);
+    if (soundOn) wake();  // a Sound button click or the M key is itself a gesture
   }
 
   function paint(button) {
@@ -66,14 +67,24 @@
     button.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
   }
 
-  // Browsers only start audio after a user gesture; every beep is triggered by
-  // one (a key, a tap) or follows one, so the context is created lazily here.
-  function beep(freq, ms, type) {
-    if (!soundOn) return;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    if (!audio) audio = new AC();
+  // Browsers only start audio inside a user gesture, and Safari on iOS only
+  // resumes it inside one too, but many beeps come from a game's frame loop
+  // (Snake's first is eating a fruit, long after the key press or swipe). So
+  // every tap, click and key press creates or wakes the context while it can.
+  function wake() {
+    if (!soundOn) return null;
+    if (!audio) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audio = new AC();
+    }
     if (audio.state === 'suspended') audio.resume();
+    return audio;
+  }
+  for (const type of ['touchend', 'click', 'keydown']) window.addEventListener(type, wake, true);
+
+  function beep(freq, ms, type) {
+    if (!wake()) return;
     const t = audio.currentTime;
     const d = (ms || 80) / 1000;
     const osc = audio.createOscillator();
