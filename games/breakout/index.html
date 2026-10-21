@@ -1,0 +1,339 @@
+<!--
+Title: Breakout
+Description: Bounce the ball off your paddle to smash every brick; clear the wall to face a faster ball.
+Controls: Arrow keys or A/D to move the paddle, Space or Enter to launch (and restart after a game over), P or the Pause button to pause, M or the Sound button to mute; drag on the screen to move and tap to launch on touch (the mouse moves the paddle too); Tab to the "Arcade" link and Enter to go back to the launcher (tap it on touch).
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Breakout — Browser Arcade</title>
+  <style>
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#111;color:#eee}
+    canvas{display:block;background:#1a1a1a;margin:0 auto;border:1px solid #333;box-sizing:content-box}
+    #hud{position:fixed;left:10px;top:10px;font-size:18px}
+    #best{color:#aaa;font-size:14px}
+    #buttons{position:fixed;right:10px;top:10px;display:flex;gap:8px;z-index:10}
+    #buttons button{min-width:44px;min-height:44px;padding:8px 12px;background:#444;color:#fff;border:1px solid #555;border-radius:6px;touch-action:manipulation}
+    #pauseBtn{touch-action:none}
+    /* The overlays sit under the controls and never eat a tap: the back link and
+       the buttons must still work while the game is paused or over. */
+    #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:28px;z-index:5;pointer-events:none}
+    #overOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:rgba(0,0,0,0.7);color:#fff;font-size:26px;text-align:center;z-index:5;pointer-events:none}
+    #overOverlay small{font-size:15px;color:#bbb}
+    /* Back to the launcher: required by CONTRIBUTING.md. Bottom-left keeps it clear
+       of the HUD (top-left) and the buttons (top-right) down to ~320px width.
+       44x44 CSS pixels minimum so it is a real tap target. */
+    a.back{position:fixed;left:10px;bottom:10px;z-index:10;display:inline-flex;align-items:center;
+           min-width:44px;min-height:44px;box-sizing:border-box;padding:10px 14px;
+           background:#333;color:#eee;border:1px solid #555;border-radius:8px;
+           font-size:16px;line-height:1;text-decoration:none}
+    a.back:hover{background:#3d3d3d}
+    a.back:focus{outline:3px solid #0db;outline-offset:2px}
+    a.back:focus-visible{outline:3px solid #0db;outline-offset:2px}
+    button{font:inherit}
+    /* The whole screen is the drag pad on touch, not just the board. */
+    main{display:flex;align-items:center;justify-content:center;height:100%;touch-action:none}
+  </style>
+</head>
+<body>
+  <div id="hud">Score: <span id="score" aria-live="polite" aria-atomic="true">0</span> <span id="lives">&#9829;3</span> <span id="best" aria-hidden="true">best 0</span></div>
+  <div id="buttons">
+    <button id="soundBtn" aria-pressed="true">Sound on</button>
+    <button id="pauseBtn" aria-pressed="false">Pause</button>
+  </div>
+  <div id="pauseOverlay" role="status" aria-hidden="true">Paused</div>
+  <div id="overOverlay" role="status" aria-hidden="true">
+    <div>Game over</div>
+    <small>Press Enter or tap to play again</small>
+  </div>
+  <main><canvas id="c"></canvas></main>
+  <!-- Required by CONTRIBUTING.md: keep this link when you copy the template. -->
+  <a class="back" href="../../index.html">&larr; Arcade</a>
+
+  <script src="../../common/arcade.js"></script>
+  <script>
+    // Breakout: one game file plus the shared common/arcade.js, no dependencies, no build step.
+    const canvas = document.getElementById('c');
+    const pad = document.querySelector('main');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+    const bestEl = document.getElementById('best');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    const overOverlay = document.getElementById('overOverlay');
+
+    const W = 480, H = 640;               // logical board size; the canvas scales to fit
+    const COLS = 8, ROWS = 6, GAP = 6, SIDE = 16, TOP = 70;
+    const BW = (W - 2 * SIDE - (COLS - 1) * GAP) / COLS, BH = 18;
+    const COLORS = ['#e5534b', '#e0823d', '#d4b13a', '#5bb85b', '#0db', '#6c8cff'];
+    const PW = 84, PH = 12, PY = H - 40;  // paddle size and height on the board
+    const PADDLE_SPEED = 520;             // px per second on the keyboard
+    const R = 7;                          // ball radius
+    const START_SPEED = 300, MAX_SPEED = 560;
+
+    const hs = Arcade.highScore('breakout');
+    Arcade.soundButton(document.getElementById('soundBtn'));
+
+    let ctx, bricks, px, target, ball, speed, score, lives, level, paused, over, serving;
+    const held = {left: false, right: false};
+
+    function buildWall(){
+      bricks = [];
+      for(let r = 0; r < ROWS; r++){
+        for(let c = 0; c < COLS; c++){
+          bricks.push({x: SIDE + c * (BW + GAP), y: TOP + r * (BH + GAP), row: r, alive: true});
+        }
+      }
+    }
+
+    function reset(){
+      score = 0; lives = 3; level = 1;
+      speed = START_SPEED;
+      px = (W - PW) / 2; target = null;
+      buildWall();
+      serve();
+      setPaused(false);
+      setOver(false);
+      updateHud();
+      render();
+    }
+
+    // The ball waits on the paddle until the player launches it.
+    function serve(){
+      serving = true;
+      ball = {x: px + PW / 2, y: PY - R - 1, vx: 0, vy: 0};
+    }
+
+    function launch(){
+      if(!serving || paused || over) return;
+      serving = false;
+      const a = (Math.random() - 0.5) * Math.PI / 3;  // up to 30 degrees off vertical
+      ball.vx = speed * Math.sin(a);
+      ball.vy = -speed * Math.cos(a);
+      Arcade.sound.beep(520, 50);
+    }
+
+    function updateHud(){
+      scoreEl.textContent = score;
+      livesEl.textContent = '\u2665' + lives;
+      hs.submit(score);
+      bestEl.textContent = 'best ' + hs.best;
+    }
+
+    function setPaused(v){
+      paused = v;
+      pauseOverlay.style.display = paused ? 'flex' : 'none';
+      pauseBtn.textContent = paused ? 'Resume' : 'Pause';
+      pauseBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+      pauseOverlay.setAttribute('aria-hidden', (!paused).toString());
+    }
+
+    function setOver(v){
+      over = v;
+      overOverlay.style.display = over ? 'flex' : 'none';
+      overOverlay.setAttribute('aria-hidden', (!over).toString());
+    }
+
+    function togglePause(){
+      if(over) return;      // the game-over overlay owns the screen
+      setPaused(!paused);
+    }
+
+    // Space, Enter and a tap all mean "go": launch a waiting ball, or start over.
+    function action(){
+      if(over) reset();
+      else launch();
+    }
+
+    // The browser only owns the keys a focused control actually consumes: Tab always
+    // moves focus, and Enter/Space follow a link or press a button while one has focus.
+    // Only those stand down here, so the back link still works and pause never
+    // double-fires. Every other key stays with the game: clicking the on-screen Pause
+    // button leaves focus on it, and the paddle keys must keep working anyway.
+    function keysBelongToBrowser(e){
+      if(e.key === 'Tab') return true;
+      if(e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return false;
+      const t = e.target;
+      if(!t || !t.closest) return false;
+      return !!t.closest('a[href], button, input, select, textarea, [contenteditable="true"]');
+    }
+
+    window.addEventListener('keydown', (e)=>{
+      if(keysBelongToBrowser(e)) return;
+      const k = e.key;
+      const low = typeof k === 'string' ? k.toLowerCase() : '';
+      if(k === 'ArrowLeft' || low === 'a'){ held.left = true; target = null; e.preventDefault(); }
+      else if(k === 'ArrowRight' || low === 'd'){ held.right = true; target = null; e.preventDefault(); }
+      else if(low === 'p'){ togglePause(); e.preventDefault(); }
+      else if(low === 'm'){ Arcade.sound.toggle(); e.preventDefault(); }
+      else if(k === 'Enter' || k === ' '){ action(); e.preventDefault(); }
+    });
+    // keyup is never guarded: a key released after focus moved must still stop the paddle.
+    window.addEventListener('keyup', (e)=>{
+      const low = typeof e.key === 'string' ? e.key.toLowerCase() : '';
+      if(e.key === 'ArrowLeft' || low === 'a') held.left = false;
+      if(e.key === 'ArrowRight' || low === 'd') held.right = false;
+    });
+
+    // Pointer: drag anywhere (or move the mouse) to steer, tap or click to launch.
+    // The buttons and the back link sit outside <main>, so their taps never land here.
+    function aim(e){
+      const rect = canvas.getBoundingClientRect();
+      target = (e.clientX - rect.left) * W / rect.width - PW / 2;
+    }
+    let down = null;
+    pad.addEventListener('pointerdown', (e)=>{
+      down = {x: e.clientX, y: e.clientY};
+      aim(e);
+    });
+    pad.addEventListener('pointermove', (e)=>{
+      if(down || e.pointerType === 'mouse') aim(e);
+    });
+    pad.addEventListener('pointerup', (e)=>{
+      if(down && Math.abs(e.clientX - down.x) < 12 && Math.abs(e.clientY - down.y) < 12) action();
+      down = null;
+    });
+    pad.addEventListener('pointercancel', ()=>{ down = null; });
+
+    pauseBtn.addEventListener('click', togglePause);
+    pauseBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); togglePause(); }, {passive:false});
+
+    // Losing focus (tab switch, phone call) pauses rather than costs a life.
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.hidden && !over && !paused) setPaused(true);
+    });
+
+    function movePaddle(dt){
+      if(target !== null){
+        const d = target - px;
+        const max = PADDLE_SPEED * 2 * dt;  // a dragged paddle catches up fast but not instantly
+        px += Math.max(-max, Math.min(max, d));
+      } else {
+        px += ((held.right ? 1 : 0) - (held.left ? 1 : 0)) * PADDLE_SPEED * dt;
+      }
+      px = Math.max(0, Math.min(W - PW, px));
+    }
+
+    // One small step of ball travel; the caller splits a frame so the ball never
+    // moves more than its radius at once and cannot tunnel through a brick.
+    function stepBall(dt){
+      const ox = ball.x, oy = ball.y;
+      ball.x += ball.vx * dt;
+      ball.y += ball.vy * dt;
+
+      if(ball.x < R){ ball.x = R; ball.vx = Math.abs(ball.vx); Arcade.sound.beep(300, 30); }
+      if(ball.x > W - R){ ball.x = W - R; ball.vx = -Math.abs(ball.vx); Arcade.sound.beep(300, 30); }
+      if(ball.y < R){ ball.y = R; ball.vy = Math.abs(ball.vy); Arcade.sound.beep(300, 30); }
+
+      // Paddle: the further from the centre the ball lands, the steeper it leaves.
+      if(ball.vy > 0 && ball.y + R >= PY && oy + R <= PY + 1 && ball.x >= px - R && ball.x <= px + PW + R){
+        const off = Math.max(-1, Math.min(1, (ball.x - (px + PW / 2)) / (PW / 2)));
+        const a = off * Math.PI / 3;
+        ball.vx = speed * Math.sin(a);
+        ball.vy = -speed * Math.cos(a);
+        ball.y = PY - R;
+        Arcade.sound.beep(440, 40);
+      }
+
+      for(const b of bricks){
+        if(!b.alive) continue;
+        if(ball.x + R < b.x || ball.x - R > b.x + BW || ball.y + R < b.y || ball.y - R > b.y + BH) continue;
+        b.alive = false;
+        // Came in from the side if it was beside the brick a moment ago, else top/bottom.
+        if(ox < b.x || ox > b.x + BW) ball.vx = -ball.vx;
+        else ball.vy = -ball.vy;
+        score += 10 * (ROWS - b.row);
+        updateHud();
+        Arcade.sound.beep(660 + 60 * (ROWS - b.row), 40);
+        break;
+      }
+
+      if(ball.y - R > H) loseBall();
+      else if(bricks.every(b => !b.alive)) nextLevel();
+    }
+
+    function loseBall(){
+      lives -= 1;
+      updateHud();
+      if(lives <= 0){
+        Arcade.sound.beep(110, 300, 'sawtooth');
+        setOver(true);
+      } else {
+        Arcade.sound.beep(180, 150, 'triangle');
+        serve();
+      }
+    }
+
+    function nextLevel(){
+      level += 1;
+      speed = Math.min(MAX_SPEED, START_SPEED + (level - 1) * 40);
+      buildWall();
+      serve();
+      Arcade.sound.beep(880, 160, 'triangle');
+    }
+
+    function update(dt){
+      movePaddle(dt);
+      if(serving){
+        ball.x = px + PW / 2;
+        ball.y = PY - R - 1;
+        return;
+      }
+      const steps = Math.max(1, Math.ceil(speed * dt / R));
+      for(let i = 0; i < steps && !serving && !over; i++) stepBall(dt / steps);
+    }
+
+    function render(){
+      ctx.clearRect(0, 0, W, H);
+
+      for(const b of bricks){
+        if(!b.alive) continue;
+        ctx.fillStyle = COLORS[b.row % COLORS.length];
+        ctx.fillRect(b.x, b.y, BW, BH);
+      }
+
+      ctx.fillStyle = '#eee';
+      ctx.fillRect(px, PY, PW, PH);
+
+      ctx.fillStyle = '#0db';
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, R, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#888';
+      ctx.font = '16px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Level ' + level, W / 2, 40);
+      if(serving && !over) ctx.fillText('Tap or press Space to launch', W / 2, PY - 60);
+    }
+
+    // Time-based loop: dt in seconds, clamped so a background tab never jumps.
+    let last = performance.now();
+    function loop(t){
+      const dt = Math.min(0.25, (t - last) / 1000);
+      last = t;
+      if(!paused && !over){
+        update(dt);
+        render();
+      }
+      requestAnimationFrame(loop);
+    }
+
+    // Fit the 3:4 board at devicePixelRatio, so it is sharp on phones; it is repainted
+    // after every refit, even while paused. It sits between the HUD and the back link,
+    // or uses the full height when the screen is wide enough to keep them beside it.
+    function room(){
+      const full = window.innerHeight - 24;
+      if((window.innerWidth - full * W / H) / 2 >= 210) return {w: 600, h: full};
+      return {w: Math.min(window.innerWidth - 24, 600), h: window.innerHeight - 136};
+    }
+    ctx = Arcade.fitCanvas(canvas, W, H, room, render);
+
+    reset();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

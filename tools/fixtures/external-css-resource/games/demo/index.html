@@ -27,5 +27,11 @@ Controls: Arrow keys or tap to move, P or the Pause button to pause.
   <script>
     // game script
   </script>
+  <button id="soundBtn" type="button">Sound on</button>
+  <script src="../../common/arcade.js"></script>
+  <script>
+    Arcade.highScore("demo");
+    Arcade.soundButton(document.getElementById("soundBtn"));
+  </script>
 </body>
 </html>

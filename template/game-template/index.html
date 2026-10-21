@@ -1,7 +1,7 @@
 <!--
 Title: Template Runner
 Description: Minimal runner scaffold demonstrating keyboard + touch, score and pause.
-Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-screen pause button; Tab to the "Arcade" link and Enter to go back to the launcher (tap it on touch).
+Controls: Arrow keys to move, Space to action, P to pause, M to mute; tap to action, on-screen pause and sound buttons; Tab to the "Arcade" link and Enter to go back to the launcher (tap it on touch).
 -->
 
 <!doctype html>
@@ -13,8 +13,11 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
   <style>
     html,body{height:100%;margin:0;font-family:sans-serif;background:#111;color:#eee}
     canvas{display:block;background:#222;margin:0 auto;touch-action:none}
+    #best{color:#aaa;font-size:14px}
     #hud{position:fixed;left:10px;top:10px;font-size:18px}
-    #pauseBtn{position:fixed;right:10px;top:10px;min-width:44px;min-height:44px;padding:8px 12px;background:#444;color:#fff;border-radius:6px;touch-action:none;z-index:10}
+    #buttons{position:fixed;right:10px;top:10px;display:flex;gap:8px;z-index:10}
+    #buttons button{min-width:44px;min-height:44px;padding:8px 12px;background:#444;color:#fff;border-radius:6px;touch-action:manipulation}
+    #pauseBtn{touch-action:none}
     /* The overlay sits under the controls and never eats a tap: the back link and
        the pause button must still work while the game is paused. */
     #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:28px;z-index:5;pointer-events:none}
@@ -32,22 +35,29 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
   </style>
 </head>
 <body>
-  <div id="hud">Score: <span id="score" aria-live="polite" aria-atomic="true">0</span></div>
-  <button id="pauseBtn" aria-pressed="false">Pause</button>
+  <div id="hud">Score: <span id="score" aria-live="polite" aria-atomic="true">0</span> <span id="best" aria-hidden="true">best 0</span></div>
+  <div id="buttons">
+    <button id="soundBtn" aria-pressed="true">Sound on</button>
+    <button id="pauseBtn" aria-pressed="false">Pause</button>
+  </div>
   <div id="pauseOverlay" role="status" aria-hidden="true">Paused</div>
-  <canvas id="c" width="600" height="400"></canvas>
+  <canvas id="c"></canvas>
   <!-- Required by CONTRIBUTING.md: keep this link when you copy the template. -->
   <a class="back" href="../../index.html">&larr; Arcade</a>
 
+  <!-- Required: the shared high-score, sound and canvas helpers (see common/arcade.js). -->
+  <script src="../../common/arcade.js"></script>
   <script>
     // Minimal game scaffold: a square that moves horizontally and a score that increases.
     const canvas = document.getElementById('c');
-    const ctx = canvas.getContext('2d');
     const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
     const pauseBtn = document.getElementById('pauseBtn');
     const pauseOverlay = document.getElementById('pauseOverlay');
 
-    let w = canvas.width, h = canvas.height;
+    const w = 600, h = 400; // logical size: draw in these units, Arcade.fitCanvas scales them
+    const hs = Arcade.highScore('template'); // use your folder name: arcade-<name>-best in localStorage
+    Arcade.soundButton(document.getElementById('soundBtn'));
     let x = 50, y = h/2 - 10, vx = 0; // vx is pixels per second
     let score = 0;
     let scoreAcc = 0; // fractional accumulator so visible score steps cleanly
@@ -59,6 +69,13 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
       pauseBtn.textContent = paused ? 'Resume' : 'Pause';
       pauseBtn.setAttribute('aria-pressed', paused ? 'true' : 'false');
       pauseOverlay.setAttribute('aria-hidden', (!paused).toString());
+    }
+
+    function addScore(n){
+      score += n;
+      scoreEl.textContent = score;
+      hs.submit(score);
+      bestEl.textContent = 'best ' + hs.best;
     }
 
     // The browser only owns the keys a focused control actually consumes: Tab always
@@ -79,8 +96,9 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
       if(keysBelongToBrowser(e)) return;
       if(e.key === 'ArrowRight' || e.key === 'd') { vx = 120; e.preventDefault(); } // pixels per second
       if(e.key === 'ArrowLeft' || e.key === 'a') { vx = -120; e.preventDefault(); }
-      if(e.key === ' ') { score += 1; scoreEl.textContent = score; e.preventDefault(); }
+      if(e.key === ' ') { addScore(1); Arcade.sound.beep(660, 40); e.preventDefault(); }
       if(e.key.toLowerCase() === 'p') setPaused(!paused);
+      if(e.key.toLowerCase() === 'm') Arcade.sound.toggle();
     });
     // keyup is never guarded: a key released after focus moved must still stop motion.
     window.addEventListener('keyup', (e)=>{
@@ -92,12 +110,15 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
     canvas.addEventListener('touchstart', (e)=>{
       e.preventDefault();
       // treat any tap as action
-      score += 1; scoreEl.textContent = score;
+      addScore(1); Arcade.sound.beep(660, 40);
     }, {passive:false});
 
     // Pause button touch/click
     pauseBtn.addEventListener('click', ()=> setPaused(!paused));
     pauseBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); setPaused(!paused); }, {passive:false});
+
+    // Switching tab or app pauses the game instead of letting it run unseen.
+    document.addEventListener('visibilitychange', ()=>{ if(document.hidden) setPaused(true); });
 
     // Simple game loop
     let last = performance.now();
@@ -120,9 +141,8 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
       scoreAcc += dt * 10;
       if(scoreAcc >= 1){
         const add = Math.floor(scoreAcc);
-        score += add;
         scoreAcc -= add;
-        scoreEl.textContent = score;
+        addScore(add);
       }
     }
 
@@ -136,15 +156,11 @@ Controls: Arrow keys to move, Space to action, P to pause; tap to action, on-scr
       ctx.fillRect(x,y,20,20);
     }
 
-    // resize to fit width while keeping aspect
-    function fit(){
-      const maxW = Math.min(window.innerWidth-20, 800);
-      const scale = Math.min(1, maxW / 600);
-      canvas.style.width = Math.round(600*scale) + 'px';
-      canvas.style.height = Math.round(400*scale) + 'px';
-    }
-    window.addEventListener('resize', fit);
-    fit();
+    // Scale to the viewport with a devicePixelRatio backing store (sharp on phones),
+    // keeping the 3:2 aspect; repaint after each refit because resizing clears it.
+    const ctx = Arcade.fitCanvas(canvas, w, h,
+      () => ({w: Math.min(window.innerWidth - 20, 800), h: window.innerHeight - 130}),
+      render);
 
     // start
     requestAnimationFrame(loop);

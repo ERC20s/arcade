@@ -27,8 +27,13 @@
  *     - it shows a score (id="score" or the text "Score:") and a pause
  *       affordance (id="pauseBtn", id="pauseOverlay" or the text "Paused")
  *     - the folder holds no .js, .css or package.json file
+ *     - it loads the shared module with a live
+ *       <script src="../../common/arcade.js"> and its own inline script calls
+ *       Arcade.highScore( and Arcade.soundButton( (comments do not count)
+ *   Shared module
+ *     - common/arcade.js exists
  *
- * All of the text searches skip HTML comments and the contents of <script> and
+ * All of the markup searches skip HTML comments and the contents of <script> and
  * <style> blocks, so a string in the game's JavaScript or a rule in its CSS
  * never stands in for markup the player can actually see.
  *   Every game, additionally
@@ -82,6 +87,8 @@ const LAUNCHER = "index.html";
 const TEMPLATE = "template/game-template/index.html";
 const GAMES_DIR = "games";
 const BACK_HREF = "../../index.html";
+const COMMON = "common/arcade.js";
+const COMMON_SRC = "../../common/arcade.js";
 
 const problems = [];
 const checked = [];
@@ -164,6 +171,51 @@ function text(html) {
     .replace(/&[a-z#0-9]+;/gi, (e) => (e in ENTITIES ? ENTITIES[e] : e))
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/* ------------------------------------------------------------- shared module */
+
+function checkCommonExists() {
+  if (!existsSync(abs(COMMON))) {
+    fail(COMMON, 0, `the shared module is missing: every game loads it with <script src="${COMMON_SRC}">`);
+    return false;
+  }
+  return true;
+}
+
+// A game must load common/arcade.js from a live <script src> tag (not one in an
+// HTML comment, nor the text "<script" inside another script's code) and use
+// its high-score store and sound toggle from its own inline JavaScript. JS
+// comments are stripped first, so a commented-out call does not count.
+function checkCommonModule(rel, html) {
+  const comments = commentRanges(html);
+  const blocks = scriptStyleRanges(html);
+  const tagRe = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+  let loaded = false;
+  let code = "";
+  let m;
+  while ((m = tagRe.exec(html))) {
+    const idx = m.index;
+    if (inRanges(comments, idx)) continue;
+    if (blocks.some(([start, end]) => idx > start && idx < end)) continue;
+    const src = m[1].match(/\bsrc\s*=\s*(['"])(.*?)\1/i);
+    if (src) {
+      if (src[2] === COMMON_SRC) loaded = true;
+    } else {
+      code += m[2] + "\n";
+    }
+  }
+  if (!loaded) {
+    fail(rel, 0, `does not load the shared module: add <script src="${COMMON_SRC}"></script> before the game's own <script>`);
+    return;
+  }
+  code = code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'\\])\/\/.*$/gm, "$1");
+  if (!/\bArcade\.highScore\s*\(/.test(code)) {
+    fail(rel, 0, "loads the shared module but never calls Arcade.highScore(...): keep the best score in the shared high-score store");
+  }
+  if (!/\bArcade\.soundButton\s*\(/.test(code)) {
+    fail(rel, 0, "loads the shared module but never calls Arcade.soundButton(...): give the player the shared sound toggle");
+  }
 }
 
 /* ------------------------------------------------------------------ launcher */
@@ -637,6 +689,7 @@ function checkGameFile(rel, { registration }) {
   }
 
   checkFolder(rel);
+  checkCommonModule(rel, html);
 
   if (registration) {
     const line = registration.listed.get(rel);
@@ -685,6 +738,7 @@ function listGames() {
 
 /* ---------------------------------------------------------------------- run */
 
+const commonOk = checkCommonExists();
 const launcher = readLauncher();
 const listed = launcher.ok ? checkLauncherEntries(launcher.entries) : new Map();
 const registration = { listed, entries: launcher.entries };
@@ -696,6 +750,7 @@ for (const rel of games) checkGameFile(rel, { registration });
 // game is copied from, so a break there breaks every future submission.
 checkGameFile(TEMPLATE, { registration: null });
 
+if (commonOk) checked.unshift(COMMON);
 if (launcher.ok) checked.unshift(`${LAUNCHER} (launcher, ${launcher.entries.length} entr${launcher.entries.length === 1 ? "y" : "ies"})`);
 
 if (problems.length) {

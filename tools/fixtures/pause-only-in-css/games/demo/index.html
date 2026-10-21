@@ -19,5 +19,11 @@ Controls: Arrow keys or tap to move; there is no pause affordance on purpose.
 <body>
   <a class="back" href="../../index.html">&larr; Arcade</a>
   <p>Score: <span id="score">0</span></p>
+  <button id="soundBtn" type="button">Sound on</button>
+  <script src="../../common/arcade.js"></script>
+  <script>
+    Arcade.highScore("demo");
+    Arcade.soundButton(document.getElementById("soundBtn"));
+  </script>
 </body>
 </html>
