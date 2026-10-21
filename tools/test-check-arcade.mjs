@@ -16,7 +16,7 @@
  *   the exit code plus the problem line that must (or must not) appear.
  *
  *   It finally runs the checker against this repository itself and asserts a
- *   clean exit, so the launcher, Snake and the template are a regression
+ *   clean exit, so the launcher, every game, common/arcade.js and the template are a regression
  *   fixture too: a new rule that is too broad fails here instead of at a vote.
  *
  * Exit code: 0 when every case passes, 1 when any case fails.
@@ -199,6 +199,53 @@ const CASES = [
     overlay: "external-css-resource",
     exit: 1,
     includes: ["games/demo/index.html", "external resource", "<style> block contains", "inline style uses"]
+  },
+  {
+    name: "a folder under games/ with no index.html is rejected",
+    overlay: "game-folder-without-index",
+    exit: 1,
+    includes: ["games/empty: game folder has no index.html"]
+  },
+  {
+    name: "a game with no <title> element is rejected",
+    overlay: "missing-title",
+    exit: 1,
+    includes: ["games/demo/index.html", "missing <title> element"]
+  },
+  {
+    name: "a game whose metadata has no Title: field is rejected",
+    overlay: "missing-metadata-title",
+    exit: 1,
+    includes: ["games/demo/index.html", 'missing a non-empty "Title:" field']
+  },
+  {
+    name: "a game that does not load common/arcade.js is rejected",
+    overlay: "missing-common-script",
+    exit: 1,
+    includes: ["games/demo/index.html", "does not load the shared module"],
+    excludes: ["template/game-template/index.html"]
+  },
+  {
+    name: "a common/arcade.js <script> inside an HTML comment does not count",
+    overlay: "common-script-commented-out",
+    exit: 1,
+    includes: ["games/demo/index.html", "does not load the shared module"]
+  },
+  {
+    name: "Arcade.highScore / Arcade.soundButton calls inside JS comments do not count",
+    overlay: "common-calls-only-in-comments",
+    exit: 1,
+    includes: ["games/demo/index.html", "never calls Arcade.highScore", "never calls Arcade.soundButton"]
+  },
+  {
+    name: "a missing common/arcade.js is rejected",
+    overlay: null,
+    exit: 1,
+    includes: ["common/arcade.js: the shared module is missing"],
+    excludes: ["does not load the shared module"],
+    mutate(root) {
+      rmSync(path.join(root, "common", "arcade.js"));
+    }
   }
 ];
 

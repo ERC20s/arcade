@@ -1,0 +1,1 @@
+Not a game: a folder under games/ with no index.html.

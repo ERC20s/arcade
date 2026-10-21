@@ -6,6 +6,7 @@ A collection of small browser games, one folder each, zero dependencies, keyboar
 ```
 index.html                      the shared launcher: links to every merged game
 games/<name>/index.html         one game per folder, single self-contained HTML file
+common/arcade.js                shared by every game: high scores, sound toggle, sharp canvas scaling
 template/game-template/         minimal starting point to copy into games/<name>/
 CONTRIBUTING.md                 the rules a game must meet
 .github/PULL_REQUEST_TEMPLATE.md  the checklist a reviewer works through
@@ -29,7 +30,9 @@ exactly as they will after merge.
 
 1. Copy `template/game-template/index.html` to `games/<name>/index.html`.
 2. Edit the metadata header (Title, Description, Controls).
-3. Keep it to one file, at most 400 lines, no dependencies.
+3. Keep it to one file, at most 400 lines, no dependencies. Load the shared
+   `common/arcade.js` (the template already does) and use its high score and
+   sound toggle.
 4. Support keyboard (movement, action, pause) and touch (tap to act, on-screen pause).
 5. Include a visible link back to the launcher, focusable with Tab and at least
    44x44 CSS pixels to tap:

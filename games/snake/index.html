@@ -1,7 +1,7 @@
 <!--
 Title: Snake
 Description: Classic grid snake: eat the fruit, grow longer, do not hit yourself or the walls.
-Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Space (or tap the board) to restart after a game over; swipe the board to turn on touch; Tab to the "Arcade" link and Enter to go back to the launcher (tap it on touch).
+Controls: Arrow keys or WASD to turn, P or the Pause button to pause, M or the Sound button to mute, Enter/Space (or tap the board) to restart after a game over; swipe anywhere on the screen to turn on touch; Tab to the "Arcade" link and Enter to go back to the launcher (tap it on touch).
 -->
 
 <!doctype html>
@@ -12,10 +12,12 @@ Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Spac
   <title>Snake — Browser Arcade</title>
   <style>
     html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#111;color:#eee}
-    canvas{display:block;background:#1a1a1a;margin:0 auto;border:1px solid #333;box-sizing:content-box;touch-action:none}
+    canvas{display:block;background:#1a1a1a;margin:0 auto;border:1px solid #333;box-sizing:content-box}
     #hud{position:fixed;left:10px;top:10px;font-size:18px}
     #best{color:#aaa;font-size:14px}
-    #pauseBtn{position:fixed;right:10px;top:10px;min-width:44px;min-height:44px;padding:8px 12px;background:#444;color:#fff;border:1px solid #555;border-radius:6px;touch-action:none;z-index:10}
+    #buttons{position:fixed;right:10px;top:10px;display:flex;gap:8px;z-index:10}
+    #buttons button{min-width:44px;min-height:44px;padding:8px 12px;background:#444;color:#fff;border:1px solid #555;border-radius:6px;touch-action:manipulation}
+    #pauseBtn{touch-action:none}
     /* The overlays sit under the controls and never eat a tap: the back link and
        the pause button must still work while the game is paused or over. */
     #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);color:#fff;font-size:28px;z-index:5;pointer-events:none}
@@ -32,59 +34,46 @@ Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Spac
     a.back:focus{outline:3px solid #0db;outline-offset:2px}
     a.back:focus-visible{outline:3px solid #0db;outline-offset:2px}
     button{font:inherit}
-    main{display:flex;align-items:center;justify-content:center;height:100%}
+    /* The whole screen is the swipe pad on touch, not just the (small) board. */
+    main{display:flex;align-items:center;justify-content:center;height:100%;touch-action:none}
   </style>
 </head>
 <body>
   <div id="hud">Score: <span id="score" aria-live="polite" aria-atomic="true">0</span> <span id="best" aria-hidden="true">best 0</span></div>
-  <button id="pauseBtn" aria-pressed="false">Pause</button>
+  <div id="buttons">
+    <button id="soundBtn" aria-pressed="true">Sound on</button>
+    <button id="pauseBtn" aria-pressed="false">Pause</button>
+  </div>
   <div id="pauseOverlay" role="status" aria-hidden="true">Paused</div>
   <div id="overOverlay" role="status" aria-hidden="true">
     <div>Game over</div>
     <small>Press Enter or tap the board to play again</small>
   </div>
-  <main><canvas id="c" width="600" height="400"></canvas></main>
+  <main><canvas id="c"></canvas></main>
   <!-- Required by CONTRIBUTING.md: keep this link when you copy the template. -->
   <a class="back" href="../../index.html">&larr; Arcade</a>
 
+  <script src="../../common/arcade.js"></script>
   <script>
-    // Snake: one self-contained file, no dependencies, no build step.
+    // Snake: one game file plus the shared common/arcade.js, no dependencies, no build step.
     const canvas = document.getElementById('c');
-    const ctx = canvas.getContext('2d');
+    const pad = document.querySelector('main');
     const scoreEl = document.getElementById('score');
     const bestEl = document.getElementById('best');
     const pauseBtn = document.getElementById('pauseBtn');
     const pauseOverlay = document.getElementById('pauseOverlay');
     const overOverlay = document.getElementById('overOverlay');
 
+    const W = 600, H = 400;             // logical board size; the canvas scales to fit
     const CELL = 20;
-    const COLS = canvas.width / CELL;   // 30
-    const ROWS = canvas.height / CELL;  // 20
+    const COLS = W / CELL;              // 30
+    const ROWS = H / CELL;              // 20
     const START_STEP = 0.14;            // seconds per move at score 0
     const MIN_STEP = 0.06;              // fastest the snake ever gets
-    const BEST_KEY = 'arcade-snake-best';
+    const hs = Arcade.highScore('snake');
+    Arcade.soundButton(document.getElementById('soundBtn'));
 
-    // Read a saved best score if storage is available; private browsing or a
-    // locked-down iframe can throw here, so fall back to an in-memory 0.
-    function loadBest(){
-      try {
-        const saved = parseInt(localStorage.getItem(BEST_KEY), 10);
-        return Number.isFinite(saved) && saved > 0 ? saved : 0;
-      } catch(e){
-        return 0;
-      }
-    }
-
-    function saveBest(v){
-      try {
-        localStorage.setItem(BEST_KEY, String(v));
-      } catch(e){
-        // Storage blocked (e.g. Safari private mode): keep playing with the
-        // in-memory best only.
-      }
-    }
-
-    let snake, dir, nextDir, fruit, score, best = loadBest(), paused, over, acc, step;
+    let ctx, snake, dir, nextDir, fruit, score, paused, over, acc, step;
 
     function reset(){
       const cx = Math.floor(COLS / 2), cy = Math.floor(ROWS / 2);
@@ -104,11 +93,8 @@ Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Spac
 
     function updateScore(){
       scoreEl.textContent = score;
-      if(score > best){
-        best = score;
-        saveBest(best);
-      }
-      bestEl.textContent = 'best ' + best;
+      hs.submit(score);
+      bestEl.textContent = 'best ' + hs.best;
     }
 
     function placeFruit(){
@@ -131,6 +117,7 @@ Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Spac
     }
 
     function setOver(v){
+      if(v && !over) Arcade.sound.beep(110, 300, 'sawtooth');
       over = v;
       overOverlay.style.display = over ? 'flex' : 'none';
       overOverlay.setAttribute('aria-hidden', (!over).toString());
@@ -171,21 +158,23 @@ Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Spac
       else if(k === 'ArrowLeft'  || low === 'a'){ turn(-1,0); e.preventDefault(); }
       else if(k === 'ArrowRight' || low === 'd'){ turn(1,0);  e.preventDefault(); }
       else if(low === 'p'){ togglePause(); e.preventDefault(); }
+      else if(low === 'm'){ Arcade.sound.toggle(); e.preventDefault(); }
       else if(k === 'Enter' || k === ' '){
         if(over){ reset(); e.preventDefault(); }
       }
     });
 
-    // Touch: swipe the board to turn, tap to restart after a game over.
-    // The on-screen Pause button covers pausing on touch devices.
+    // Touch: swipe anywhere on the screen to turn, tap to restart after a game over.
+    // The on-screen Pause button covers pausing on touch devices; the buttons and
+    // the back link sit outside <main>, so their taps never reach these handlers.
     let touchStart = null;
-    canvas.addEventListener('touchstart', (e)=>{
+    pad.addEventListener('touchstart', (e)=>{
       e.preventDefault();
       const t = e.changedTouches[0];
       touchStart = {x:t.clientX, y:t.clientY};
     }, {passive:false});
 
-    canvas.addEventListener('touchend', (e)=>{
+    pad.addEventListener('touchend', (e)=>{
       e.preventDefault();
       if(over){ reset(); touchStart = null; return; }
       if(!touchStart) return;
@@ -232,6 +221,7 @@ Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Spac
       if(eating){
         score += 1;
         updateScore();
+        Arcade.sound.beep(660, 60);
         step = Math.max(MIN_STEP, START_STEP - score * 0.004);
         placeFruit();
       } else {
@@ -240,16 +230,16 @@ Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Spac
     }
 
     function render(){
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, W, H);
 
       // Grid
       ctx.strokeStyle = '#222';
       ctx.lineWidth = 1;
       for(let x = 1; x < COLS; x++){
-        ctx.beginPath(); ctx.moveTo(x*CELL + 0.5, 0); ctx.lineTo(x*CELL + 0.5, canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x*CELL + 0.5, 0); ctx.lineTo(x*CELL + 0.5, H); ctx.stroke();
       }
       for(let y = 1; y < ROWS; y++){
-        ctx.beginPath(); ctx.moveTo(0, y*CELL + 0.5); ctx.lineTo(canvas.width, y*CELL + 0.5); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, y*CELL + 0.5); ctx.lineTo(W, y*CELL + 0.5); ctx.stroke();
       }
 
       // Fruit
@@ -283,16 +273,11 @@ Controls: Arrow keys or WASD to turn, P or the Pause button to pause, Enter/Spac
       requestAnimationFrame(loop);
     }
 
-    // Fit the board to the viewport while keeping the 3:2 aspect ratio.
-    function fit(){
-      const maxW = Math.min(window.innerWidth - 24, 800);
-      const maxH = window.innerHeight - 140;
-      const scale = Math.max(0.4, Math.min(1, maxW / canvas.width, maxH / canvas.height));
-      canvas.style.width = Math.round(canvas.width * scale) + 'px';
-      canvas.style.height = Math.round(canvas.height * scale) + 'px';
-    }
-    window.addEventListener('resize', fit);
-    fit();
+    // Fit the board to the viewport (3:2, at most 800px wide) at devicePixelRatio,
+    // so it is sharp on phones; it is repainted after every refit, even while paused.
+    ctx = Arcade.fitCanvas(canvas, W, H,
+      () => ({w: Math.min(window.innerWidth - 24, 800), h: window.innerHeight - 140}),
+      render);
 
     reset();
     requestAnimationFrame(loop);

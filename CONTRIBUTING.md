@@ -4,6 +4,9 @@ Follow these minimal rules so games work with the shared launcher and stay easy 
 Folder layout
 - Put each game in its own folder under games/, with the entry file at games/<name>/index.html.
 - No build step or external dependencies: the game must be a single HTML file with inline CSS and JS. Small static assets (an image, a sound) may sit in the same folder, but there are no separate .js/.css source files, no package.json, no bundler and no CDN runtime.
+- The one exception is the arcade's own shared module, common/arcade.js, which every game loads by relative path before its own inline script:
+  <script src="../../common/arcade.js"></script>
+  It keeps the best score in localStorage (Arcade.highScore('<name>')), provides the arcade-wide sound toggle (Arcade.soundButton(button), Arcade.sound.toggle(), Arcade.sound.beep(freq, ms)) and sizes the canvas for the screen (Arcade.fitCanvas). Every game must call Arcade.highScore and Arcade.soundButton.
 
 Required metadata
 - Each index.html must start with an HTML comment block containing these fields (exact labels):
@@ -22,7 +25,8 @@ Size constraint
 Keyboard and touch
 - Games must support keyboard controls and basic touch input.
 - Minimum required controls: movement (arrow keys or WASD), one action button (e.g. Space), and a pause toggle (P).
-- Provide equivalent touch affordances: tap for action, an on-screen pause button or two-finger tap to pause.
+- Provide equivalent touch affordances: tap for action, an on-screen pause button or two-finger tap to pause, and swipe, drag or on-screen buttons for movement.
+- Phones: scale the canvas to the viewport at devicePixelRatio so it stays sharp (Arcade.fitCanvas does this; draw in fixed logical units), and pause on visibilitychange when the page is hidden.
 - Every game must carry a visible link back to the launcher. Use a plain anchor to the root launcher:
   <a class="back" href="../../index.html">&larr; Arcade</a>
 - The back link must be reachable both ways: focusable with Tab and followed with Enter, with a visible focus style, and tappable with a target of at least 44x44 CSS pixels. Do not swallow Enter or Tab in a global keydown handler, and keep the link clear of the pause overlay so it still works while paused.
@@ -47,7 +51,7 @@ Template
 - Everything else is still on you: the template is a starting point, not proof of compliance, and your game still needs the launcher list entry described above before it can be merged.
 
 How to verify a submission
-- Run npm run check from the repository root (Node 18 or newer; no install, no dependencies). It re-checks the launcher links, the metadata header, the back link, the 400-line limit and the no-extra-source-files rule for every game and for the template, prints one line per problem and exits non-zero. It is a first pass, not a replacement for the manual checks below.
+- Run npm run check from the repository root (Node 18 or newer; no install, no dependencies). It re-checks the launcher links, that every game folder has an index.html, the metadata header and page <title>, the back link, the 400-line limit, the no-extra-source-files rule and the use of common/arcade.js for every game and for the template, prints one line per problem and exits non-zero. It is a first pass, not a replacement for the manual checks below.
 - If your change touches a rule in tools/check-arcade.mjs, also run npm test. That is the checker's own self-test: it runs the checker with --root against the small fixture arcades in tools/fixtures/ (a clean one and one per known-bad case) and against this repository, and asserts the exit code and the problem line. A rule that is too broad fails the clean fixture; a rule that is too narrow fails its known-bad fixture. Add a fixture folder and a row in the CASES table there when you add a rule.
 - Serve the repository root (see README.md) and open the launcher, not the game file directly, so relative links behave as they will after merge.
 - Check the metadata header is present and correct.

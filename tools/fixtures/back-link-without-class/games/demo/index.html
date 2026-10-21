@@ -14,5 +14,11 @@ Controls: Arrow keys or tap to move, P or the Pause button to pause.
   <p>Score: <span id="score">0</span></p>
   <button id="pauseBtn" type="button">Pause</button>
   <div id="pauseOverlay" hidden>Paused</div>
+  <button id="soundBtn" type="button">Sound on</button>
+  <script src="../../common/arcade.js"></script>
+  <script>
+    Arcade.highScore("demo");
+    Arcade.soundButton(document.getElementById("soundBtn"));
+  </script>
 </body>
 </html>
