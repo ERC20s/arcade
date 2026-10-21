@@ -596,7 +596,7 @@ function checkGameFile(rel, { registration }) {
       const am = attrs.match(attrRe);
       if (!am) continue;
       const val = am[2];
-      if (/^\s*(?:https?:|\\/\\/)/i.test(val)) {
+      if (/^\s*(?:https?:|\/\/)/i.test(val)) {
         const line = lineOf(html, idx2);
         fail(rel, line, `external resource in live markup: <${tag}> uses ${val} — games must be self-contained (use data: URIs or inline the asset)`);
       }
@@ -610,7 +610,7 @@ function checkGameFile(rel, { registration }) {
       if (inRanges(skip, idx3)) continue;
       const styleText = sm[2];
       // match url(...) where inside it starts with http:, https: or //
-      const cssUrlRe = /url\(\s*['"]?\s*(?:https?:|\\/\\/)[^'"\)\s]+\s*['"]?\s*\)/i;
+      const cssUrlRe = /url\(\s*['"]?\s*(?:https?:|\/\/)[^'"\)\s]+\s*['"]?\s*\)/i;
       if (cssUrlRe.test(styleText)) {
         const line = lineOf(html, idx3);
         const snippetMatch = styleText.match(cssUrlRe);
@@ -626,7 +626,7 @@ function checkGameFile(rel, { registration }) {
     while ((sbm = styleBlockRe.exec(html))) {
       const css = sbm[1];
       const idx4 = sbm.index;
-      const cssUrlRe2 = /url\(\s*['"]?\s*(?:https?:|\\/\\/)[^'"\)\s]+\s*['"]?\s*\)/i;
+      const cssUrlRe2 = /url\(\s*['"]?\s*(?:https?:|\/\/)[^'"\)\s]+\s*['"]?\s*\)/i;
       if (cssUrlRe2.test(css)) {
         const line = lineOf(html, idx4);
         const snippetMatch = css.match(cssUrlRe2);
